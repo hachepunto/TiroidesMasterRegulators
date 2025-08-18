@@ -47,7 +47,8 @@ query <- GDCquery(
 )
 
 download_if_needed(query)
-raw_counts <- GDCprepare(query, summarizedExperiment = FALSE) %>% as.data.frame()
+raw_counts <- GDCprepare(query, summarizedExperiment = FALSE) %>%
+  as.data.frame()
 
 # Keep only gene_name, gene_id, gene_type and unstranded counts
 count_cols <- grep("^unstranded_", colnames(raw_counts), value = TRUE)
@@ -82,7 +83,9 @@ filtered_counts <- raw_counts_clean[, keep_cols]
 #############################################
 collapsed <- filtered_counts %>% 
   group_by(gene_name) %>%
-  summarise(across(everything(), ~getmode(.)), .groups = "drop")
+  summarise(across(everything(), 
+                    ~getmode(.)), 
+            .groups = "drop")
 
 #############################################
 # 5. Filter low-expressed genes and normalize (TMM + CPM)
@@ -111,7 +114,7 @@ write_tsv(inmat_NOS, "inmat_TCGA.txt")
 group <- factor(ifelse(colnames(cpm_matrix) %in% tumors, "tumor", "normal"))
 design <- model.matrix(~group)
 
-# voom transformation and linear model fitting
+ # voom transformation and linear model fitting
 v <- voom(dge, design, plot = FALSE)
 fit <- lmFit(v, design)
 fit <- eBayes(fit)
@@ -187,8 +190,6 @@ gsea_go_out <- run_gsea_go(df = deg_results)
 write_tsv(gsea_go_out$gsea_result@result,
           paste0(outputsFolder, "tcga_gsea_go_bp_mf.tsv"))
 
-saveRDS(gsea_go_out, paste0(rdsFolder, "tcga_gsea_go_out.rds"))
-
 # Ridgeplot for GO
 pdf(paste0(plotsFolder, "tcga_gsea_go.pdf"), width = 12, height = 15)
 plot_ridge_panels(gsea_go_out$gsea_result, 20, title = "TCGA GSEA GO Ridgeplot")
@@ -202,8 +203,6 @@ kegg_gsea <- gseKEGG(geneList = gsea_go_out$gene_list,
 
 # Save KEGG results
 write_tsv(kegg_gsea@result, paste0(outputsFolder, "tcga_gsea_kegg.tsv"))
-
-saveRDS(kegg_gsea, paste0(rdsFolder, "tcga_gsea_kegg_out.rds"))
 
 # Ridgeplot for KEGG
 pdf(paste0(plotsFolder, "tcga_gsea_kegg.pdf"), width = 12, height = 15)
@@ -244,71 +243,5 @@ plot(mrs, density = 100, color = c("#0571b0", "#ca0020"),
      smooth = 0, cex = 0, bins = 800, sep = 1, hybrid = TRUE, gama = 3)
 dev.off()
 
-#############################################
-# 9. ORA: Hallmark enrichment with MSigDB gene sets
-#############################################
-
-# Universe of expressed genes used in ORA
-gene_universe <- rownames(cpm_matrix)
-
-# Load Hallmark data (GSEA Broad GMT)
-hallmark_gmt <- read.gmt("extra_data/h.all.v2025.1.Hs.symbols.gmt")
-
-# Extract regulons for the top 10 MRTFs
-top_mrs <- mrs_all  %>%  slice(1:20)
-regulon_df <- getregulon(regulon, tf_list = top_mrs$TF)
-
-# Run ORA mode 1: per TF
-ora_tf <- ora_hallmarks(regulon_df = regulon_df,
-                        hallmark_gmt = hallmark_gmt,
-                        universe = gene_universe,
-                        mode = "by_tf")
-write_tsv(ora_tf, paste0(outputsFolder, "TCGA_ORA_hallmark_byTF.tsv"))
-saveRDS(ora_tf, paste0(rdsFolder, "tcga_ora_hallmark_byTF.rds"))
-
-# Run ORA mode 2: all targets combined
-ora_all <- ora_hallmarks(regulon_df = regulon_df,
-                         hallmark_gmt = hallmark_gmt,
-                         universe = gene_universe,
-                         mode = "all_targets")
-write_tsv(ora_all, paste0(outputsFolder, "TCGA_ORA_hallmark_allTargets.tsv"))
-saveRDS(ora_all, paste0(rdsFolder, "tcga_ora_hallmark_alltargets.rds"))
-
-#############################################
-# 10. ORA: GO + KEGG enrichment per TF and all targets
-#############################################
-
-# ORA per TF with GO (ALL categories)
-ora_go_by_tf <- ora_go(regulon_df,
-                       universe = gene_universe,
-                       mode = "by_tf",
-                       organism = org.Hs.eg.db)
-
-# ORA with GO for all targets combined
-ora_go_all_targets <- ora_go(regulon_df,
-                             universe = gene_universe,
-                             mode = "all_targets",
-                             organism = org.Hs.eg.db)
-
-# ORA per TF with KEGG
-ora_kegg_by_tf <- ora_kegg(regulon_df,
-                           universe = gene_universe,
-                           mode = "by_tf")
-
-# ORA with KEGG for all targets combined
-ora_kegg_all_targets <- ora_kegg(regulon_df,
-                                 universe = gene_universe,
-                                 mode = "all_targets")
-
-# Save combined results to files
-write_tsv(ora_go_by_tf, paste0(outputsFolder, "tcga_ora_go_by_tf.tsv"))
-write_tsv(ora_go_all_targets, paste0(outputsFolder, "tcga_ora_go_all_targets.tsv"))
-write_tsv(ora_kegg_by_tf, paste0(outputsFolder, "tcga_ora_kegg_by_tf.tsv"))
-write_tsv(ora_kegg_all_targets, paste0(outputsFolder, "tcga_ora_kegg_all_targets.tsv"))
-
-saveRDS(ora_go_by_tf, paste0(rdsFolder, "tcga_ora_go_by_tf.rds"))
-saveRDS(ora_go_all_targets, paste0(rdsFolder, "tcga_ora_go_all_targets.rds"))
-saveRDS(ora_kegg_by_tf, paste0(rdsFolder, "tcga_ora_kegg_by_tf.rds"))
-saveRDS(ora_kegg_all_targets, paste0(rdsFolder, "tcga_ora_kegg_all_targets.rds"))
 
 # save.image("TCGA_session.RData")

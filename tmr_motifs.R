@@ -176,7 +176,7 @@ tss_data <- getBM(
 # Report genes not found
 not_found <- setdiff(sign_tmrs, unique(tss_data$hgnc_symbol))
 if(length(not_found)) {
-  warning("Estos genes no se encontraron en Ensembl:\n", paste(not_found, collapse=", "))
+  warning("These genes were not found in Ensembl:\n", paste(not_found, collapse=", "))
 }
 
 # Select one representative TSS per gene
@@ -390,7 +390,7 @@ circos.par(start.degree = 90, gap.degree = 1, track.margin = c(0.02, 0.02))
 
 chordDiagram(
   x               = interaction_matrix,
-  order           = tf_order,            # <- clave
+  order           = tf_order,
   grid.col        = tf_colors,
   col             = color_mat,
   link.arr.col    = color_mat,
@@ -416,7 +416,7 @@ circos.trackPlotRegion(
     ylim <- get.cell.meta.data("ylim")
     circos.text(
       x       = mean(xlim),
-      y       = ylim[2] + mm_y(2.5),  # << saca el texto fuera del anillo
+      y       = ylim[2] + mm_y(2.5),
       labels  = sector_labels[sec],
       facing  = "clockwise",
       niceFacing = FALSE,
@@ -460,7 +460,6 @@ tmr_meta_fisher <- tmr_df %>%
 
 tmr_meta <- tmr_df %>%
   mutate(
-    # SE ≈ |logFC| / |t|   (aprox. fixed-effect a partir de limma)
     se_tcga = abs(log_fc_tcga) / pmax(abs(t_tcga), .Machine$double.eps),
     se_geo  = abs(log_fc_geo)  / pmax(abs(t_geo),  .Machine$double.eps),
     w_tcga  = 1 / (se_tcga^2),
@@ -493,13 +492,13 @@ tf_mode <- binding_hits_annot %>%
 
 
 
-# ========= 1) META dirección por TF =========
+# ========= 1) META direction by TF =========
 meta_dir <- tmr_meta %>%
   transmute(tf = gene_name, dir, sig = p_meta_iv_adj < 0.05)
 
 stopifnot(all(tf_order %in% meta_dir$tf))
 
-# ========= 2) Clasificar enlaces: activación/represión =========
+# ========= 2) Classify links: activation/repression =========
 edge_df <- binding_hits_annot %>%
   count(TF_from, TF_target, name = "n_hits") %>%
   left_join(rename(meta_dir, dir_from = dir, sig_from = sig), by = c("TF_from" = "tf")) %>%
@@ -512,11 +511,7 @@ edge_df <- binding_hits_annot %>%
     )
   )
 
-# ========= 3) Soporte de red ARACNe =========
-# esperados: data frames con columnas: tf, target
-# ajusta nombres si los tuyos difieren
-# e.g., aracne_tcga <- read_tsv("aracne_tcga.tsv")
-#       aracne_geo  <- read_tsv("aracne_geo.tsv")
+# ========= 3) ARACNe network support =========
 
 aracne_tcga <- read_tsv("tcga_tumor_network.txt") %>% 
       rename(tf = Regulator, target = Target, mi = MI)
@@ -536,23 +531,22 @@ edge_df2 <- edge_df %>%
     aracne_support = replace_na(aracne_support, 0L)
   )
 
-# Filtra por soporte mínimo (elige 1 o 2)
+# Filter by minimum support
 min_support <- 1
 edge_plot <- edge_df2 %>%
   filter(aracne_support >= min_support)
 
-# ========= 4) Matriz para chord y colores =========
-# Matriz de interacciones ponderada (puedes multiplicar por soporte si quieres)
+# ========= 4) Matrix for chord and colors =========
+
 edge_clean <- edge_plot %>%
   transmute(TF_from, TF_target, weight = n_hits * aracne_support) %>%
   filter(!is.na(TF_from), !is.na(TF_target))
 
-# matriz “observada” (solo para pares presentes)
+# “observed” matrix (only for present pairs)
 mat_obs <- xtabs(weight ~ TF_from + TF_target,
                 data = edge_clean) %>%
             as.matrix()
 
-# expándela al cuadrado 50x50 en el orden deseado
 full_mat <- matrix(0, nrow = length(tf_order), ncol = length(tf_order),
                    dimnames = list(tf_order, tf_order))
 common_r <- intersect(rownames(mat_obs), tf_order)
@@ -561,28 +555,22 @@ full_mat[common_r, common_c] <- mat_obs[common_r, common_c]
 
 interaction_mat <- full_mat
 
-# Colores únicos por TF emisor
 base_pal <- colorRampPalette(brewer.pal(11, "Spectral"))(length(tf_order))
-set.seed(42) # mezclar para que no queden secuenciales
+set.seed(42)
 tf_colors <- setNames(sample(base_pal), tf_order)
 
-# Matriz de colores de enlaces heredando del emisor
+# Link color matrix inheriting from the emisor
 color_mat <- matrix(tf_colors[rownames(interaction_mat)],
                     nrow = nrow(interaction_mat), ncol = ncol(interaction_mat),
                     dimnames = dimnames(interaction_mat))
 color_mat[interaction_mat == 0] <- "transparent"
 
-# Grid: color por emisor; los que no emiten quedan grises si quieres
 grid_cols <- tf_colors
 
-# ========= 5) Dibujo del circos =========
-# 1) Limpiar y fijar parámetros base
+# ========= 5) Circus drawing =========
 circos.clear()
 circos.par(start.degree = 90, gap.degree = 1, track.margin = c(0.02, 0.02))
 
-# 2) Prealoca dos tracks EXTERNOS:
-#    track 2: halo (fino)
-#    track 3: etiquetas
 chordDiagram(
   x               = interaction_mat,
   order           = tf_order,
@@ -602,13 +590,13 @@ chordDiagram(
   )
 )
 
-# ========= 6) Anillo exterior: meta-dirección (up/down) =========
-# Creamos un track muy finito fuera del grid y coloreamos según dir
-dir_cols <- c(up = "#E41A1C", down = "#377EB8")  # rojo=up, azul=down
+# ========= 6) Outer ring: meta-direction (up/down) =========
+
+dir_cols <- c(up = "#E41A1C", down = "#377EB8")  # red=up, blue=down
 names(dir_cols) <- names(dir_cols)
 
 old_pad <- circos.par("cell.padding")
-circos.par(cell.padding = c(0, 0, 0, 0))  # top,right,bottom,left = 0
+circos.par(cell.padding = c(0, 0, 0, 0)) 
 
 circos.trackPlotRegion(
   track.index = 2,
@@ -622,10 +610,10 @@ circos.trackPlotRegion(
   }
 )
 
-# restaura padding para lo demás
+# restores padding for the rest
 circos.par(cell.padding = old_pad)
 
-# ========= 7) Etiquetas fuera del círculo con (n_targets/n_beaters) =========
+# ========= 7) Labels outside the circle with (n_targets/n_beaters) =========
 label_df <- tibble::tibble(tf = tf_order) %>%
   mutate(
     n_targets_mi  = purrr::map_int(tf, ~ sum(interaction_mat[.x, ] > 0, na.rm = TRUE)),
@@ -642,8 +630,8 @@ circos.trackPlotRegion(
     xl   <- get.cell.meta.data("xlim")
     circos.text(
       x       = mean(xl),
-      y       = 0.5,  # centradas en el track 3 (externo)
-      labels  = sector_labels[sec],   # "TF (n_targets/n_beaters)"
+      y       = 0.5, 
+      labels  = sector_labels[sec],
       facing  = "clockwise",
       niceFacing = FALSE,
       adj     = c(0, 0.5),
@@ -653,7 +641,7 @@ circos.trackPlotRegion(
 )
 
 
-# Leyendas
+# Legends
 lg_dir <- Legend(
   labels = c("Up-regulated", "Down-regulated"),
   legend_gp = gpar(fill = c("#D62728", "#1F77B4")),
@@ -669,14 +657,12 @@ lg_aracne <- Legend(
   type = "lines"
 )
 
-# Empaquetar en horizontal
 lg_pack <- packLegend(lg_dir, lg_aracne, direction = "horizontal")
 
-# Dibujar en coordenadas absolutas (porcentaje de página)
 draw(
   lg_pack,
-  x    = unit(0.08, "npc"),   # izquierda-derecha (0 = izq, 1 = der)
-  y    = unit(0.08, "npc"),   # abajo-arriba (0 = abajo, 1 = arriba)
+  x    = unit(0.08, "npc"), 
+  y    = unit(0.08, "npc"), 
   just = c("left", "bottom")
 )
 
@@ -796,8 +782,8 @@ circos.trackPlotRegion(
     xl   <- get.cell.meta.data("xlim")
     circos.text(
       x       = mean(xl),
-      y       = 0.5,  # centradas en el track 3 (externo)
-      labels  = sector_labels[sec],   # "TF (n_targets/n_beaters)"
+      y       = 0.5, 
+      labels  = sector_labels[sec], 
       facing  = "clockwise",
       niceFacing = FALSE,
       adj     = c(0, 0.5),
@@ -806,8 +792,8 @@ circos.trackPlotRegion(
   })
 draw(
   lg_pack,
-  x    = unit(0.08, "npc"),   # izquierda-derecha (0 = izq, 1 = der)
-  y    = unit(0.08, "npc"),   # abajo-arriba (0 = abajo, 1 = arriba)
+  x    = unit(0.08, "npc"),  
+  y    = unit(0.08, "npc"),   
   just = c("left", "bottom"))
 title("Circos plot of directional interactions among 50 thyroid Transcriptional Master Regulators (Outgoing vs. Incoming TFs)")
 dev.off()

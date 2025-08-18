@@ -8,9 +8,9 @@
 #############################################
 
 suppressPackageStartupMessages({
-  library(TCGAbiolinks)
   library(DESeq2)
   library(dplyr)
+  library(affy)
   library(org.Hs.eg.db)
   library(tibble)
   library(corto)
@@ -24,6 +24,7 @@ suppressPackageStartupMessages({
   library(EnhancedVolcano)
   library(RColorBrewer)
   library(gplots)
+  library(GEOquery)
 })
 # Load helper functions
 source("scripts/helpers.R")
@@ -75,7 +76,7 @@ eset <- rma(raw_affy)
 #############################################
 
 # Download GEO metadata for GSE33630
-gse <- getGEO("GSE33630", GSEMatrix = TRUE)
+gse <- getGEO("GSE33630", GSEMatrix = TRUE, getGPL = FALSE)
 metadata <- pData(phenoData(gse[[1]]))
 
 # Ensure sample names in metadata match those in eset
@@ -302,8 +303,6 @@ gsea_go_out <- run_gsea_go(df = results_collapsed)
 write_tsv(gsea_go_out$gsea_result@result,
           paste0(outputsFolder, "geo_gsea_go_bp_mf.tsv"))
 
-saveRDS(gsea_go_out, file = paste0(rdsFolder, "geo_gsea_go_out.rds"))
-
 # Ridgeplot for GO
 pdf(paste0(plotsFolder, "geo_gsea_go.pdf"), width = 12, height = 15)
 plot_ridge_panels(gsea_go_out$gsea_result, 20, title = "GEO GSEA GO Ridgeplot")
@@ -317,7 +316,6 @@ kegg_gsea <- gseKEGG(geneList = gsea_go_out$gene_list,
 
 # Save KEGG results
 write_tsv(kegg_gsea@result, paste0(outputsFolder, "geo_gsea_kegg.tsv"))
-saveRDS(kegg_gsea, file = paste0(rdsFolder, "geo_gsea_kegg_out.rds"))
 
 # Ridgeplot for KEGG
 pdf(paste0(plotsFolder, "geo_gsea_kegg.pdf"), width = 12, height = 15)
@@ -337,7 +335,8 @@ signature <- (qnorm(signature$p.value / 2, lower.tail = FALSE) *
 
 nullmodel <- ttestNull(collapsed[, tumors], 
                        collapsed[, healty], 
-                       per = 1000, repos = TRUE)
+                       per = 1000, 
+                       repos = TRUE)
 
 mrs <- msviper(signature, regulon, nullmodel)
 mrs_all <- viper_mrsTopTable(mrs, p_threshold = 1)
@@ -358,72 +357,5 @@ plot(mrs, 20, density = 100, color = c("#0571b0", "#ca0020"),
      smooth = 0, cex = 0, bins = 800, sep = 1, hybrid = TRUE, gama = 3)
 dev.off()
 
-
-#############################################
-# 9. ORA: Hallmark enrichment with MSigDB gene sets
-#############################################
-
-# Universe of expressed genes used in ORA
-gene_universe <- rownames(collapsed)
-
-# Load Hallmark data (GSEA Broad GMT)
-hallmark_gmt <- read.gmt("extra_data/h.all.v2025.1.Hs.symbols.gmt")
-
-# Extract regulons for the top 10 MRTFs
-top_mrs <- mrs_all  %>%  slice(1:20)
-regulon_df <- getregulon(regulon, tf_list = top_mrs$TF)
-
-# Run ORA mode 1: per TF
-ora_tf <- ora_hallmarks(regulon_df = regulon_df,
-                        hallmark_gmt = hallmark_gmt,
-                        universe = gene_universe,
-                        mode = "by_tf")
-write_tsv(ora_tf, paste0(outputsFolder, "GEO_ORA_hallmark_byTF.tsv"))
-saveRDS(ora_tf, "geo_ora_hallmark_byTF.rds")
-
-# Run ORA mode 2: all targets combined
-ora_all <- ora_hallmarks(regulon_df = regulon_df,
-                         hallmark_gmt = hallmark_gmt,
-                         universe = gene_universe,
-                         mode = "all_targets")
-write_tsv(ora_all, paste0(outputsFolder, "GEO_ORA_hallmark_allTargets.tsv"))
-saveRDS(ora_all, "geo_ora_hallmark_alltargets.rds")
-
-#############################################
-# 10. ORA: GO + KEGG enrichment per TF and all targets
-#############################################
-
-# ORA per TF with GO (ALL categories)
-ora_go_by_tf <- ora_go(regulon_df,
-                       universe = gene_universe,
-                       mode = "by_tf",
-                       organism = org.Hs.eg.db)
-
-# ORA with GO for all targets combined
-ora_go_all_targets <- ora_go(regulon_df,
-                             universe = gene_universe,
-                             mode = "all_targets",
-                             organism = org.Hs.eg.db)
-
-# ORA per TF with KEGG
-ora_kegg_by_tf <- ora_kegg(regulon_df,
-                           universe = gene_universe,
-                           mode = "by_tf")
-
-# ORA with KEGG for all targets combined
-ora_kegg_all_targets <- ora_kegg(regulon_df,
-                                 universe = gene_universe,
-                                 mode = "all_targets")
-
-# Save combined results to files
-write_tsv(ora_go_by_tf, paste0(outputsFolder, "geo_ora_go_by_tf.tsv"))
-write_tsv(ora_go_all_targets, paste0(outputsFolder, "geo_ora_go_all_targets.tsv"))
-write_tsv(ora_kegg_by_tf, paste0(outputsFolder, "geo_ora_kegg_by_tf.tsv"))
-write_tsv(ora_kegg_all_targets, paste0(outputsFolder, "geo_ora_kegg_all_targets.tsv"))
-
-saveRDS(ora_go_by_tf, "geo_ora_go_by_tf.rds")
-saveRDS(ora_go_all_targets, "geo_ora_go_all_targets.rds")
-saveRDS(ora_kegg_by_tf, "geo_ora_kegg_by_tf.rds")
-saveRDS(ora_kegg_all_targets, "geo_ora_kegg_all_targets.rds")
 
 # save.image("GEO_session.RData")

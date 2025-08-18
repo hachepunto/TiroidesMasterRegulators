@@ -272,43 +272,11 @@ meta_hallm_byTF_barplot <- ggplot(filt_hallm_meta_byTF, aes(x = full_label, y = 
   plot.caption = element_text(size = 10, face = "italic")
  )
 
-meta_hallm_byTF_barplot
-
-######################################################################################
-
-meta_hallm_byTF_dotplot <- ggplot(filt_hallm_meta_byTF, aes(x = mean_enrichment, y = full_label)) +
- geom_point(aes(size = abs(mean_nes), color = meta_padj)) +
- scale_color_gradient(
-  low = "#2c7fb8", high = "#253494",
-  name = "Meta-adjusted\np-value",
-  trans = "reverse"
- ) +
- scale_size_continuous(name = "Abs. Mean NES") +
- labs(
-  title = "Hallmark pathway enrichment across TMR regulons",
-  x = "Average fold enrichment",
-  y = NULL
- ) +
- theme_minimal(base_size = 14) +
- theme(
-  axis.text.y = element_text(size = 11),
-  axis.text.x = element_text(size = 12),
-  plot.title = element_text(face = "bold", size = 18),
-  legend.position = "right"
- )
-
-meta_hallm_byTF_dotplot
-
 ######################################################################################
 
 ggsave(paste0(plotsFolder, "meta_hallm_byTF_barplot.pdf"), plot = meta_hallm_byTF_barplot, 
     width = 12, height = 10, units = "in", dpi = 300)
 ggsave(paste0(plotsFolder, "meta_hallm_byTF_barplot.png"), plot = meta_hallm_byTF_barplot, 
-    width = 12, height = 10, units = "in", dpi = 300)
-
-ggsave(paste0(plotsFolder, "meta_hallm_byTF_dotplot.pdf"), plot = meta_hallm_byTF_dotplot, 
-    width = 12, height = 10, units = "in", dpi = 300)
-ggsave(paste0(plotsFolder, "meta_hallm_byTF_dotplot.png"), plot = meta_hallm_byTF_dotplot, 
     width = 12, height = 10, units = "in", dpi = 300)
 
 
@@ -380,33 +348,6 @@ meta_hallm_all_barplot <- ggplot(filt_hallm_meta_all, aes(x = full_label, y = me
   plot.caption = element_text(size = 10, face = "italic")
  )
 
-meta_hallm_all_barplot
-
-######################################################################################
-
-meta_hallm_all_dotplot <- ggplot(filt_hallm_meta_all, aes(x = mean_enrichment, y = full_label)) +
- geom_point(aes(size = abs(mean_enrichment), color = meta_padj)) +
- scale_color_gradient(
-  low = "#2c7fb8", high = "#253494",
-  name = "Meta-adjusted\np-value",
-  trans = "reverse"
- ) +
- scale_size_continuous(name = "Abs. Mean NES") +
- labs(
-  title = "Hallmark pathway enrichment across TMR regulons",
-  x = "Average fold enrichment",
-  y = NULL
- ) +
- theme_minimal(base_size = 14) +
- theme(
-  axis.text.y = element_text(size = 11),
-  axis.text.x = element_text(size = 12),
-  plot.title = element_text(face = "bold", size = 18),
-  legend.position = "right"
- )
-
-meta_hallm_all_dotplot
-
 ######################################################################################
 
 ggsave(paste0(plotsFolder, "meta_hallm_all_barplot.pdf"), plot = meta_hallm_all_barplot, 
@@ -414,39 +355,12 @@ ggsave(paste0(plotsFolder, "meta_hallm_all_barplot.pdf"), plot = meta_hallm_all_
 ggsave(paste0(plotsFolder, "meta_hallm_all_barplot.png"), plot = meta_hallm_all_barplot, 
     width = 12, height = 10, units = "in", dpi = 300)
 
-ggsave(paste0(plotsFolder, "meta_hallm_all_dotplot.pdf"), plot = meta_hallm_all_dotplot, 
-    width = 12, height = 10, units = "in", dpi = 300)
-ggsave(paste0(plotsFolder, "meta_hallm_all_dotplot.png"), plot = meta_hallm_all_dotplot, 
-    width = 12, height = 10, units = "in", dpi = 300)
-
-# ----------------------------
-### Upset plot
-# ----------------------------
-
-
-# Convertir a formato wide con presencia/ausencia
-upset_hallmark_matrix <- filt_hallm_meta_byTF %>%
- select(set, label) %>% 
- mutate(value = 1) %>%
- pivot_wider(names_from = label, values_from = value, values_fill = 0)
-
-# Obtener los nombres de las columnas de hallmark
-upset_hallmarks <- setdiff(names(upset_hallmark_matrix), "set")
-
-# Graficar
-upset(upset_hallmark_matrix, 
-   intersect = upset_hallmarks,
-   name = "Shared Hallmarks",
-   width_ratio = 0.2,
-   min_size = 1,
-   sort_sets = "descending",
-   sort_intersections_by = "cardinality")
 
 # ----------------------------
 ### heatmap plot
 # ----------------------------
 
-# — 1. Prepara tus datos igual que antes —
+# — 1. Prepare data —
 tf_hallmark_long <- filt_hallm_meta_byTF %>% 
  distinct(set, label) %>% 
  mutate(present = 1) %>% 
@@ -475,9 +389,9 @@ hallmark_counts <- hallmark_counts %>%
 tf_counts    <- tf_counts    %>% 
  mutate(set    = factor(set, levels = tf_levels))
 
-# — 2. Los tres paneles —
+# — 2. Three panels —
 
-# 2a) Matriz de puntos (heatmap‐like)
+# 2a) Dot matrix (heatmap‐like)
 main_plot <- ggplot(tf_hallmark_long, aes(x = hallmark, y = set)) +
  geom_point(size = 3) +
  scale_x_discrete(expand = expansion(add = c(0.5, 0.5))) +
@@ -489,7 +403,7 @@ main_plot <- ggplot(tf_hallmark_long, aes(x = hallmark, y = set)) +
   panel.grid = element_blank()
  )
 
-# 2b) Barras arriba con etiquetas mixtas
+# 2b) Bars above with mixed labels
 top_bar <- ggplot(hallmark_counts, aes(x = hallmark, y = n)) +
  geom_col(fill = "grey40", width = 0.4) +
  geom_text(
@@ -516,7 +430,7 @@ top_bar <- ggplot(hallmark_counts, aes(x = hallmark, y = n)) +
   panel.grid = element_blank()
  )
 
-# 2c) Barras a la derecha con etiquetas condicionadas
+# 2c) Bars on the right with conditional labels
 right_bar <- ggplot(tf_counts, aes(x = n, y = set)) +
  geom_col(fill = "grey40", width = 0.6) +
  geom_text(
@@ -543,7 +457,7 @@ right_bar <- ggplot(tf_counts, aes(x = n, y = set)) +
   panel.grid  = element_blank()
  )
 
-# 3. Ensámblalo como antes
+# 3. Assemble it
 upper <- cowplot::plot_grid(
  NULL, top_bar, NULL,
  ncol    = 3,
@@ -566,7 +480,6 @@ co_ocurrence <- cowplot::plot_grid(
 )
 
 co_ocurrence
-
 
 ggsave(paste0(plotsFolder,"meta_tmrs-hallamrks_co-ocurrence-plot.pdf"), plot = co_ocurrence, 
     width = 15, height = 9, units = "in", dpi = 300)
@@ -856,7 +769,7 @@ ggsave(paste0(plotsFolder, "meta_kegg_bar_plot_byTF.png"), plot = meta_kegg_bar_
 # 14. Meta analysis ORA: GEO enrichment per all targets 
 #############################################
 
-# GEO No tuvo ontologías enriquecidas
+# GEO did not have enriched ontologies
 
 #############################################
 # 15. Meta analysis ORA: KEGG enrichment per all targets 

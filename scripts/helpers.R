@@ -77,13 +77,13 @@ run_gsea_go <- function(df, organism_db = org.Hs.eg.db) {
 
  # Validación de columnas
  if (!all(c("gene_name", "logFC") %in% colnames(df))) {
-  stop("El data frame debe tener columnas 'gene_name' y 'logFC'")
+  stop("The data frame most have 'gene_name' and 'logFC' columns")
  }
 
  # Filtrar posibles NA en logFC
  df <- df %>% filter(!is.na(logFC))
 
- message("→ Mapeando símbolos a Entrez IDs...")
+ message("→ Maping gene symbols to Entrez IDs...")
 
  # Mapear símbolos a Entrez IDs
  gene_mapping <- bitr(df$gene_name,
@@ -92,7 +92,7 @@ run_gsea_go <- function(df, organism_db = org.Hs.eg.db) {
             OrgDb = organism_db)
 
  if (nrow(gene_mapping) == 0) {
-  stop("No se pudo mapear ningún símbolo a EntrezID.")
+  stop("None symbol could be mapped to EntrezID")
  }
 
  # Unir logFC con los IDs mapeados
@@ -106,7 +106,7 @@ run_gsea_go <- function(df, organism_db = org.Hs.eg.db) {
  names(gene_list) <- df_mapped$ENTREZID
  gene_list <- sort(gene_list, decreasing = TRUE)
 
- message("→ Ejecutando GSEA con ontología GO (BP y MF)...")
+ message("→ Running GSEA with GO ontology (BP and MF)...")
 
  # Ejecutar GSEA con ontología ALL
  gsea_all <- gseGO(geneList = gene_list,
@@ -123,7 +123,7 @@ run_gsea_go <- function(df, organism_db = org.Hs.eg.db) {
  gsea_filtered@result <- gsea_all@result %>%
   filter(ONTOLOGY %in% c("MF", "BP"))
 
- message("✓ GSEA completo.")
+ message("✓ GSEA complited")
 
  return(list(
   gsea_result = gsea_filtered,
@@ -182,7 +182,7 @@ ora_hallmarks <- function(regulon_df, hallmark_gmt, universe, mode = c("by_tf", 
  mode <- match.arg(mode)
 
  if (!all(c("tf", "target") %in% colnames(regulon_df))) {
-  stop("El objeto regulon_df debe contener columnas 'tf' y 'target'")
+  stop("The regulon_df object must contain 'tf' and 'target' columns")
  }
 
  # Verifica universo en mayúsculas para símbolos (por si acaso)
