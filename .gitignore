@@ -47,3 +47,29 @@ po/*~
 
 # RStudio Connect folder
 rsconnect/
+
+# data folders
+GDCdata
+GEOdata
+
+# results folders
+meta_results
+plots
+rds
+results
+TF_motives_results
+
+# data files generated
+GEO_session.RData
+geo_tumor_network.txt
+gitignore.txt
+inmat_GEO.txt
+inmat_TCGA.txt
+MANIFEST.txt
+meta_analysis_session.RData
+missing_tfs.txt
+pipeline_Thyroids_MR.png
+TCGA_session.RData
+tcga_tumor_network.txt
+tfs_found_jaspar.txt
+tmr_motifs.RData
