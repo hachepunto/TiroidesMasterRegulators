@@ -60,19 +60,18 @@ results
 TF_motives_results
 
 # data files generated
-GEO_session.RData
 geo_tumor_network.txt
-gitignore.txt
+tcga_tumor_network.txt
 inmat_GEO.txt
 inmat_TCGA.txt
 MANIFEST.txt
-meta_analysis_session.RData
 missing_tfs.txt
-pipeline_Thyroids_MR.png
-TCGA_session.RData
-tcga_tumor_network.txt
-tfs_found_jaspar.txt
+
+# Rdata sessions
 tmr_motifs.RData
+GEO_session.RData
+TCGA_session.RData
+meta_analysis_session.RData
 
 # MacOS files
 *.DS_Store

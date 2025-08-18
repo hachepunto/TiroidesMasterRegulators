@@ -1,0 +1,8 @@
+tf	id_jaspar	sp
+TFCP2L1	MA0145.2	Mus_musculus
+SALL4	UN0262.1	Mus_musculus
+FOXQ1	MA0040.1	Rattus_norvegicus
+MAFB	MA0117.2	Mus_musculus
+CREB5	MA0840.1	Mus_musculus
+ESRRG	MA0643.1	Mus_musculus
+ZNF548	UN0333.1	Homo_sapiens
