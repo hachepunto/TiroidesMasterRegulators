@@ -1,0 +1,3 @@
+[submodule "ARACNe-AP"]
+	path = ARACNe-AP
+	url = https://github.com/califano-lab/ARACNe-AP.git
