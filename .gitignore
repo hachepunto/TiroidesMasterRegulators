@@ -58,6 +58,8 @@ plots
 rds
 results
 TF_motives_results
+tcga_network
+geo_network
 
 # data files generated
 geo_tumor_network.txt
