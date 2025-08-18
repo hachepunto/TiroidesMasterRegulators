@@ -73,3 +73,32 @@ TCGA_session.RData
 tcga_tumor_network.txt
 tfs_found_jaspar.txt
 tmr_motifs.RData
+
+# MacOS files
+*.DS_Store
+.AppleDouble
+.LSOverride
+
+# Icon must end with two 
+
+Icon
+
+
+# Thumbnails
+._*
+
+# Files that might appear in the root of a volume
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Directories potentially created on remote AFP share
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
