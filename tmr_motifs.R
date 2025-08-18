@@ -37,7 +37,7 @@ suppressPackageStartupMessages({
 })
 
 # Create output directories (idempotent)
-outputsFolder <- file.path(getwd(), "TF_motives_results")
+outputsFolder <- file.path(getwd(), "TF_motives_results/")
 plotsFolder   <- file.path(outputsFolder, "plots/")
 dir.create(outputsFolder, showWarnings = FALSE, recursive = TRUE)
 dir.create(plotsFolder,   showWarnings = FALSE, recursive = TRUE)
@@ -81,21 +81,20 @@ missing_tfs <- setdiff(sign_tmrs, found_tfs)
 # (Documented manual addition)
 # Some motifs were retrieved manually from JASPAR (web UI) because they did not
 # resolve by TF name. We add them here by explicit JASPAR IDs.
-# recovered <- vroom::vroom("tfs_found_jaspar.txt")
 
-manual_ids <- c("MA0145.2", "UN0262.1", "MA0040.1", "MA0117.2", "MA0840.1", "MA0643.1", "UN0333.1")
+recovered <- vroom::vroom("extra_data/tfs_found_jaspar.txt")
 
-manual_pfms_core <- getMatrixSet(
-  JASPAR2022,
-  opts = list(ID = manual_ids)
-)
-
-# Coerce PFMatrixList to a plain list and name by the intended TF symbols
-manual_pfms <- as.list(manual_pfms_core)
-manual_pfms <- set_names(
-  manual_pfms,
-  recovered$tf[ match(names(manual_pfms), recovered$id_jaspar) ]
-)
+manual_pfms <- recovered %>%
+  filter(!is.na(id_jaspar)) %>% 
+  distinct(tf, id_jaspar) %>%
+  mutate(
+    pfm = map(id_jaspar, ~ {
+      ms <- getMatrixSet(JASPAR2022, opts = list(collection="CORE", tax_group="vertebrates", ID = .x))
+      ms[[.x]]
+    })
+  ) %>%
+  select(tf, pfm) %>%
+  deframe() 
 
 # Merge automatic and manual PFMs
 # If a TF appears in both, prefer the manually specified entry.
@@ -523,7 +522,7 @@ aracne_union <- bind_rows(
   aracne_tcga %>% mutate(ds = "tcga"),
   aracne_geo  %>% mutate(ds = "geo")
 ) %>%
-  count(tf, target, name = "aracne_support") # 1 o 2
+  count(tf, target, name = "aracne_support")
 
 edge_df2 <- edge_df %>%
   left_join(aracne_union, by = c("TF_from" = "tf", "TF_target" = "target")) %>%

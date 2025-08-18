@@ -616,35 +616,7 @@ meta_go_bar_plot_byTF <- ggplot(filt_go_meta_byTF, aes(x = full_label, y = mean_
   plot.subtitle = element_text(size = 13, margin = margin(b = 10)),
   plot.caption = element_text(size = 10, face = "italic")
  )
-meta_go_bar_plot_byTF
 ######################################################################################
-meta_go_dot_plot_byTF <- ggplot(filt_go_meta_byTF, aes(x = mean_enrichment, y = full_label)) +
- geom_point(aes(size = mean_enrichment, color = meta_padj)) +
- scale_color_gradient(
-  low = "#2c7fb8", high = "#253494",
-  name = "Meta-adjusted\np-value",
-  trans = "reverse"
- ) +
- scale_size_continuous(name = "Mean enrichment") +
- labs(
-  title = "GO ontologies enrichment across TMR regulons",
-  x = "Average fold enrichment",
-  y = NULL
- ) +
- theme_minimal(base_size = 14) +
- theme(
-  axis.text.y = element_text(size = 11),
-  axis.text.x = element_text(size = 12),
-  plot.title = element_text(face = "bold", size = 18),
-  legend.position = "right"
- )
-meta_go_dot_plot_byTF
-######################################################################################
-ggsave(paste0(plotsFolder, "meta_go_dot_plot_byTF.pdf"), plot = meta_go_dot_plot_byTF, 
-    width = 12, height = 10, units = "in", dpi = 300)
-ggsave(paste0(plotsFolder, "meta_go_dot_plot_byTF.png"), plot = meta_go_dot_plot_byTF, 
-    width = 12, height = 10, units = "in", dpi = 300)
-
 ggsave(paste0(plotsFolder, "meta_go_bar_plot_byTF.pdf"), plot = meta_go_bar_plot_byTF, 
     width = 12, height = 10, units = "in", dpi = 300)
 ggsave(paste0(plotsFolder, "meta_go_bar_plot_byTF.png"), plot = meta_go_bar_plot_byTF, 
@@ -703,7 +675,6 @@ filt_kegg_meta_byTF <- kegg_meta_byTF %>%
 
 ######################################################################################
 
-
 meta_kegg_bar_plot_byTF <- ggplot(filt_kegg_meta_byTF, aes(x = full_label, y = mean_enrichment, fill = meta_padj)) +
  geom_col(width = 0.7, color = "grey20") +
  coord_flip() +
@@ -730,34 +701,8 @@ meta_kegg_bar_plot_byTF <- ggplot(filt_kegg_meta_byTF, aes(x = full_label, y = m
   plot.subtitle = element_text(size = 13, margin = margin(b = 10)),
   plot.caption = element_text(size = 10, face = "italic")
  )
-meta_kegg_bar_plot_byTF
+
 ######################################################################################
-meta_kegg_dot_plot_byTF <- ggplot(filt_kegg_meta_byTF, aes(x = mean_enrichment, y = full_label)) +
- geom_point(aes(size = mean_enrichment, color = meta_padj)) +
- scale_color_gradient(
-  low = "#2c7fb8", high = "#253494",
-  name = "Meta-adjusted\np-value",
-  trans = "reverse"
- ) +
- scale_size_continuous(name = "Mean enrichment") +
- labs(
-  title = "KEGG pathway enrichment across TMR regulons",
-  x = "Average fold enrichment",
-  y = NULL
- ) +
- theme_minimal(base_size = 14) +
- theme(
-  axis.text.y = element_text(size = 11),
-  axis.text.x = element_text(size = 12),
-  plot.title = element_text(face = "bold", size = 18),
-  legend.position = "right"
- )
-meta_kegg_dot_plot_byTF
-######################################################################################
-ggsave(paste0(plotsFolder, "meta_kegg_dot_plot_byTF.pdf"), plot = meta_kegg_dot_plot_byTF, 
-    width = 12, height = 10, units = "in", dpi = 300)
-ggsave(paste0(plotsFolder, "meta_kegg_dot_plot_byTF.png"), plot = meta_kegg_dot_plot_byTF, 
-    width = 12, height = 10, units = "in", dpi = 300)
 
 ggsave(paste0(plotsFolder, "meta_kegg_bar_plot_byTF.pdf"), plot = meta_kegg_bar_plot_byTF, 
     width = 12, height = 10, units = "in", dpi = 300)
@@ -774,7 +719,6 @@ ggsave(paste0(plotsFolder, "meta_kegg_bar_plot_byTF.png"), plot = meta_kegg_bar_
 #############################################
 # 15. Meta analysis ORA: KEGG enrichment per all targets 
 #############################################
-
 
 kegg_meta_all_targets <- full_join(
   geo_ora_kegg_all_targets,
@@ -824,7 +768,6 @@ filt_kegg_meta_all_targets <- kegg_meta_all_targets %>%
 
 ######################################################################################
 
-
 meta_kegg_bar_plot_all_targets <- ggplot(filt_kegg_meta_all_targets, aes(x = full_label, y = mean_enrichment, fill = meta_padj)) +
  geom_col(width = 0.7, color = "grey20") +
  coord_flip() +
@@ -851,34 +794,8 @@ meta_kegg_bar_plot_all_targets <- ggplot(filt_kegg_meta_all_targets, aes(x = ful
   plot.subtitle = element_text(size = 13, margin = margin(b = 10)),
   plot.caption = element_text(size = 10, face = "italic")
  )
-meta_kegg_bar_plot_all_targets
+
 ######################################################################################
-meta_kegg_dot_plot_all_targets <- ggplot(filt_kegg_meta_all_targets, aes(x = mean_enrichment, y = full_label)) +
- geom_point(aes(size = mean_enrichment, color = meta_padj)) +
- scale_color_gradient(
-  low = "#2c7fb8", high = "#253494",
-  name = "Meta-adjusted\np-value",
-  trans = "reverse"
- ) +
- scale_size_continuous(name = "Mean enrichment") +
- labs(
-  title = "KEGG pathway enrichment across TMR regulons",
-  x = "Average fold enrichment",
-  y = NULL
- ) +
- theme_minimal(base_size = 14) +
- theme(
-  axis.text.y = element_text(size = 11),
-  axis.text.x = element_text(size = 12),
-  plot.title = element_text(face = "bold", size = 18),
-  legend.position = "right"
- )
-meta_kegg_dot_plot_all_targets
-######################################################################################
-ggsave(paste0(plotsFolder, "meta_kegg_dot_plot_all_targets.pdf"), plot = meta_kegg_dot_plot_all_targets, 
-    width = 12, height = 10, units = "in", dpi = 300)
-ggsave(paste0(plotsFolder, "meta_kegg_dot_plot_all_targets.png"), plot = meta_kegg_dot_plot_all_targets, 
-    width = 12, height = 10, units = "in", dpi = 300)
 
 ggsave(paste0(plotsFolder, "meta_kegg_bar_plot_all_targets.pdf"), plot = meta_kegg_bar_plot_all_targets, 
     width = 12, height = 10, units = "in", dpi = 300)
