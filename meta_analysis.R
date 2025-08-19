@@ -66,7 +66,7 @@ pdf(paste0(plotsFolder, "meta_volcano_TMRs.pdf"), width = 8, height = 12)
 EnhancedVolcano(meta_results,
   lab = meta_results$tf,
   x = 'mean_nes',
-  y = 'meta_pval',
+  y = 'meta_padj',
   pCutoff = 0.05,
   FCcutoff = 1,
   xlim = c(-4, 4),
