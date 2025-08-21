@@ -242,6 +242,8 @@ filt_hallm_meta_byTF <- hallm_meta_byTF %>%
   full_label = factor(full_label, levels = full_label) 
  )
 
+write_tsv(filt_hallm_meta_byTF, paste0(outputsFolder, "meta_hallm_byTF.tsv"))
+
 ######################################################################################
 
 
@@ -318,6 +320,7 @@ filt_hallm_meta_all <- hallm_meta_all %>%
   full_label = factor(full_label, levels = full_label) 
  )
 
+write_tsv(filt_hallm_meta_all, paste0(outputsFolder, "meta_hallm_all.tsv"))
 ######################################################################################
 
 
