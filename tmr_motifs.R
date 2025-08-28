@@ -85,24 +85,24 @@ missing_tfs <- setdiff(sign_tmrs, found_tfs)
 
 
 
-# Busca por coincidencia exacta en tf_name (insensible a mayúsculas)
+# Search for exact match in tf_name (case insensitive)
 find_rows_exact <- function(tbl, tf_symbol) {
   if (is.null(tbl)) return(tibble())
   tbl %>%
     filter(str_to_upper(tf_name) == str_to_upper(tf_symbol))
 }
 
-# Fallback "contiene" (útil para micro-variantes; evita matches muy laxos)
-# Usa bordes de palabra y permite -/_ opcionales (ETV-5 vs ETV5).
+# Fallback "contains" (useful for micro-variants; avoids very loose matches)
+# Uses word borders and allows optional -/_ (ETV-5 vs ETV5).
 find_rows_fuzzy <- function(tbl, tf_symbol) {
   if (is.null(tbl)) return(tibble())
-  pat <- str_replace_all(tf_symbol, "[-_ ]", "[-_ ]?")           # tolera guiones/espacios opcionales
-  pat <- paste0("\\b", pat, "\\b")                               # borde de palabra
+  pat <- str_replace_all(tf_symbol, "[-_ ]", "[-_ ]?")
+  pat <- paste0("\\b", pat, "\\b")
   tbl %>%
     filter(str_detect(tf_name, regex(pat, ignore_case = TRUE)))
 }
 
-# PRIORIDAD de motivo (ajústala si quieres)
+# Motifs priority
 motif_type_priority <- c("ChIP-seq","ChIP-seq/ChIP-exo","SELEX","PBM","B1H","EMSA","DNase","PWM","Other")
 prio <- function(x) match(x, motif_type_priority, nomatch = length(motif_type_priority)+1L)
 
@@ -121,7 +121,7 @@ choose_best_motif <- function(df_tfrows) {
     slice(1)
 }
 
-# Dado un TF, busca primero exacto en primaria; si no, exacto en all/plus; si no, fuzzy en las tres
+# Given a TF, first search for exact in primary; if not, exact in all/plus; if not, fuzzy in all three
 get_cisbp_motif_meta <- function(tf_symbol, cis_primary, cis_all = NULL, cis_plus = NULL) {
   cand <- bind_rows(
     find_rows_exact(cis_primary, tf_symbol),
@@ -160,9 +160,10 @@ audit <- purrr::map_dfr(missing_tfs, try_read_one)
 audit %>% count(ok, reason)
 audit %>% filter(!ok)
 
-# ---- Configuración CIS-BP ----
-cisbp_dir <- "extra_data/Homo_sapiens_2025_08_23_3_48_am"  # tu ruta
-pwms_dir  <- file.path(cisbp_dir, "pwms_all_motifs")        # <-- confirma que exista
+# ---- CIS-BP configuration ----
+unzip("extra_data/Homo_sapiens_2025_08_23_3_48_am.zip")
+cisbp_dir <- "extra_data/Homo_sapiens_2025_08_23_3_48_am" 
+pwms_dir  <- file.path(cisbp_dir, "pwms_all_motifs")        # <-- confirms that it exists
 
 cis_primary <- vroom::vroom(tf_info_primary, delim="\t", col_types=cols(.default="c")) %>% janitor::clean_names()
 cis_all     <- if (file.exists(tf_info_all))  vroom::vroom(tf_info_all,  delim="\t", col_types=cols(.default="c")) %>% janitor::clean_names() else NULL
@@ -190,14 +191,13 @@ cisbp_pwm_list <- purrr::map(missing_tfs, function(tf) {
   purrr::compact()
 
 
-# pequeño resumen
 data.frame(
   tf = missing_tfs,
   ok = missing_tfs %in% names(cisbp_pwm_list)
 ) |> dplyr::count(ok)
 
 
-# 1) Carga de recuperados manuales (por si aún no los tienes en el entorno)
+# 1) Loading of manual recovered
 recovered <- vroom::vroom("extra_data/tfs_found_jaspar.txt", show_col_types = FALSE)
 
 manual_pfms <- recovered %>%
@@ -212,7 +212,7 @@ manual_pfms <- recovered %>%
   select(tf, pfm) %>%
   deframe()
 
-# 2) Asegura etiquetas de origen para todo
+# 2) Ensures source labels for everyone
 tag_source <- function(x, src) {
   if (is.null(x@tags$source)) x@tags$source <- src
   x
@@ -221,7 +221,7 @@ pfm_list         <- imap(pfm_list,         ~ tag_source(.x, "JASPAR"))          
 manual_pfms      <- imap(manual_pfms,      ~ tag_source(.x, "JASPAR(manual)"))        # manual JASPAR
 cisbp_pwm_list   <- imap(cisbp_pwm_list,   ~ { .x@tags$source <- "CIS-BP"; .x })      # ya son PWMs; OK
 
-# 3) Convertir todo a PWM (si algo sigue en PFM)
+# 3) Convert everything to PWM (if anything is still PFM)
 to_pwm_if_needed <- function(x) {
   if (inherits(x, "PWMatrix")) return(x)
   if (inherits(x, "PFMatrix")) return(TFBSTools::toPWM(x, pseudocounts = 0.2))
@@ -230,17 +230,17 @@ to_pwm_if_needed <- function(x) {
 pwm_jaspar_auto   <- imap(pfm_list,    ~ to_pwm_if_needed(.x))
 pwm_jaspar_manual <- imap(manual_pfms, ~ to_pwm_if_needed(.x))
 
-# 4) Unificación con prioridad: manual JASPAR > auto JASPAR > CIS-BP
-#    - Para evitar sobrescribir, construimos en orden inverso y dejamos que el último gane
+# 4) Priority unification: JASPAR manual > JASPAR auto > CIS-BP
+#    - To avoid overwriting, we build in reverse order and let the last one win.
 pwm_list_extended <- list()
-# base: CIS-BP (más baja prioridad)
+# base: CIS-BP (lowest priority)
 pwm_list_extended <- modifyList(pwm_list_extended, cisbp_pwm_list, keep.null = FALSE)
-# luego JASPAR auto (sobrescribe si existe en CIS-BP)
+# then JASPAR auto (overwrites if exists in CIS-BP)
 pwm_list_extended <- modifyList(pwm_list_extended, pwm_jaspar_auto, keep.null = FALSE)
-# al final JASPAR manual (máxima prioridad)
+# at the end JASPAR manual (highest priority)
 pwm_list_extended <- modifyList(pwm_list_extended, pwm_jaspar_manual, keep.null = FALSE)
 
-# 5) Resumen de cobertura
+# 5) Coverage Summary
 found_tfs_all   <- sort(intersect(sign_tmrs, names(pwm_list_extended)))
 missing_after   <- setdiff(sign_tmrs, names(pwm_list_extended))
 
@@ -253,7 +253,7 @@ coverage_tbl <- tibble(
 message("Cobertura: ", coverage_tbl$n_with_pwm, "/", coverage_tbl$total_sign_tmrs,
         " (faltan ", coverage_tbl$n_missing, ")")
 
-# 6) ¿De dónde vino cada TF? (fuente efectiva usada)
+# 6) effective source used
 motif_source <- function(pwm) pwm@tags$source %||% NA_character_
 source_tbl <- tibble(
   tf = found_tfs_all,
@@ -262,14 +262,14 @@ source_tbl <- tibble(
   mutate(source = ifelse(is.na(source), "UNKNOWN", source)) %>%
   count(source, name = "n")
 
-# 7) ¿Cuáles de los 'missing_tfs' originales resolvió CIS-BP?
+# 7) Which of the original 'missing_tfs' did CIS-BP resolve?
 resolved_by_cisbp <- intersect(names(cisbp_pwm_list), setdiff(sign_tmrs, names(pfm_list)))
 resolved_tbl <- tibble(
   resolved_by_cisbp = length(resolved_by_cisbp),
   still_missing     = length(missing_after)
 )
 
-# 8) Tabla de metadatos para reproducibilidad
+# 8) Metadata table for reproducibility
 metadata_table <- purrr::imap_dfr(pwm_list_extended, function(pwm, tf) {
   get_tag_chr <- function(x) {
     if (is.null(x)) return(NA_character_)
@@ -288,11 +288,11 @@ metadata_table <- purrr::imap_dfr(pwm_list_extended, function(pwm, tf) {
   )
 }) %>% dplyr::arrange(tf)
 
-# 9) Persistir resultados
+# 9) Persist results
 dir.create(file.path(outputsFolder, "motifs"), showWarnings = FALSE, recursive = TRUE)
 readr::write_tsv(metadata_table, file.path(outputsFolder, "motifs", "motif_metadata_combined.tsv"))
 
-# Guardar la lista combinada en RDS
+# Save the combo list to RDS
 saveRDS(pwm_list_extended, file.path(outputsFolder, "motifs", "pwm_list_extended_list.rds"))
 
 
