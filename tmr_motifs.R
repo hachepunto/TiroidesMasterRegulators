@@ -26,6 +26,8 @@ suppressPackageStartupMessages({
   library(stringr)
   library(readr)
   library(tibble)
+  library(vroom)
+  library(janitor)
   
   # Visualization
   library(circlize)
@@ -41,6 +43,9 @@ outputsFolder <- file.path(getwd(), "TF_motives_results/")
 plotsFolder   <- file.path(outputsFolder, "plots/")
 dir.create(outputsFolder, showWarnings = FALSE, recursive = TRUE)
 dir.create(plotsFolder,   showWarnings = FALSE, recursive = TRUE)
+
+# utilidades
+`%||%` <- function(a, b) if (is.null(a)) b else a
 
 #############################################
 # 2) Obtaining motifs
@@ -78,79 +83,218 @@ pfm_list <- purrr::map(sign_tmrs, get_pfm_for_tf) %>%
 found_tfs   <- names(pfm_list)
 missing_tfs <- setdiff(sign_tmrs, found_tfs)
 
-# (Documented manual addition)
-# Some motifs were retrieved manually from JASPAR (web UI) because they did not
-# resolve by TF name. We add them here by explicit JASPAR IDs.
 
-recovered <- vroom::vroom("extra_data/tfs_found_jaspar.txt")
+
+# Busca por coincidencia exacta en tf_name (insensible a mayúsculas)
+find_rows_exact <- function(tbl, tf_symbol) {
+  if (is.null(tbl)) return(tibble())
+  tbl %>%
+    filter(str_to_upper(tf_name) == str_to_upper(tf_symbol))
+}
+
+# Fallback "contiene" (útil para micro-variantes; evita matches muy laxos)
+# Usa bordes de palabra y permite -/_ opcionales (ETV-5 vs ETV5).
+find_rows_fuzzy <- function(tbl, tf_symbol) {
+  if (is.null(tbl)) return(tibble())
+  pat <- str_replace_all(tf_symbol, "[-_ ]", "[-_ ]?")           # tolera guiones/espacios opcionales
+  pat <- paste0("\\b", pat, "\\b")                               # borde de palabra
+  tbl %>%
+    filter(str_detect(tf_name, regex(pat, ignore_case = TRUE)))
+}
+
+# PRIORIDAD de motivo (ajústala si quieres)
+motif_type_priority <- c("ChIP-seq","ChIP-seq/ChIP-exo","SELEX","PBM","B1H","EMSA","DNase","PWM","Other")
+prio <- function(x) match(x, motif_type_priority, nomatch = length(motif_type_priority)+1L)
+
+choose_best_motif <- function(df_tfrows) {
+  if (nrow(df_tfrows) == 0) return(NULL)
+  df_tfrows %>%
+    mutate(
+      tf_status     = tf_status %||% NA,
+      motif_type    = motif_type %||% NA,
+      m_source_year = suppressWarnings(as.integer(m_source_year)),
+      pr_tf_status  = case_when(tf_status == "D" ~ 0L, tf_status == "I" ~ 1L, TRUE ~ 2L),
+      pr_type       = prio(motif_type),
+      pr_year       = -m_source_year
+    ) %>%
+    arrange(pr_tf_status, pr_type, pr_year, motif_id) %>%
+    slice(1)
+}
+
+# Dado un TF, busca primero exacto en primaria; si no, exacto en all/plus; si no, fuzzy en las tres
+get_cisbp_motif_meta <- function(tf_symbol, cis_primary, cis_all = NULL, cis_plus = NULL) {
+  cand <- bind_rows(
+    find_rows_exact(cis_primary, tf_symbol),
+    find_rows_exact(cis_all,     tf_symbol),
+    find_rows_exact(cis_plus,    tf_symbol)
+  ) %>% distinct()
+
+  if (nrow(cand) == 0) {
+    cand <- bind_rows(
+      find_rows_fuzzy(cis_primary, tf_symbol),
+      find_rows_fuzzy(cis_all,     tf_symbol),
+      find_rows_fuzzy(cis_plus,    tf_symbol)
+    ) %>% distinct()
+  }
+
+  if (nrow(cand) == 0) return(NULL)
+  choose_best_motif(cand)
+}
+
+
+
+try_read_one <- function(tf) {
+  meta <- get_cisbp_motif_meta(tf, cis_primary, cis_all, cis_plus)
+  if (is.null(meta) || is.null(meta$motif_id) ||
+      is.na(meta$motif_id) || meta$motif_id %in% c(".", "")) {
+    return(tibble::tibble(tf=tf, motif_id=meta$motif_id %||% NA_character_, ok=FALSE, reason="bad_id"))
+  }
+  pfm <- try(read_cisbp_pfm(meta$motif_id, pwms_dir, verbose = TRUE), silent = TRUE)
+  if (inherits(pfm, "try-error") || is.null(pfm)) {
+    return(tibble::tibble(tf=tf, motif_id=meta$motif_id, ok=FALSE, reason="read_fail"))
+  }
+  tibble::tibble(tf=tf, motif_id=meta$motif_id, ok=TRUE, reason="ok")
+}
+
+audit <- purrr::map_dfr(missing_tfs, try_read_one)
+audit %>% count(ok, reason)
+audit %>% filter(!ok)
+
+# ---- Configuración CIS-BP ----
+cisbp_dir <- "extra_data/Homo_sapiens_2025_08_23_3_48_am"  # tu ruta
+pwms_dir  <- file.path(cisbp_dir, "pwms_all_motifs")        # <-- confirma que exista
+
+cis_primary <- vroom::vroom(tf_info_primary, delim="\t", col_types=cols(.default="c")) %>% janitor::clean_names()
+cis_all     <- if (file.exists(tf_info_all))  vroom::vroom(tf_info_all,  delim="\t", col_types=cols(.default="c")) %>% janitor::clean_names() else NULL
+cis_plus    <- if (file.exists(tf_info_plus)) vroom::vroom(tf_info_plus, delim="\t", col_types=cols(.default="c")) %>% janitor::clean_names() else NULL
+
+cisbp_pwm_list <- purrr::map(missing_tfs, function(tf) {
+  meta <- get_cisbp_motif_meta(tf, cis_primary, cis_all, cis_plus)
+  if (is.null(meta) || is.null(meta$motif_id) || meta$motif_id %in% c(".", "")) {
+    warning("CIS-BP no tiene motivo (ni exacto ni fuzzy) para: ", tf)
+    return(NULL)
+  }
+  pfm <- read_cisbp_pfm(meta$motif_id, pwms_dir, verbose = FALSE)
+  if (is.null(pfm)) {
+    warning("No pude leer PFM para ", tf, " (motif_id=", meta$motif_id, ")")
+    return(NULL)
+  }
+  pwm <- TFBSTools::toPWM(pfm, pseudocounts = 0.2)
+  pwm@tags$source        <- "CIS-BP"
+  pwm@tags$tf_status     <- meta$tf_status
+  pwm@tags$motif_type    <- meta$motif_type
+  pwm@tags$m_source_year <- meta$m_source_year
+  pwm
+}) %>%
+  rlang::set_names(missing_tfs) %>%
+  purrr::compact()
+
+
+# pequeño resumen
+data.frame(
+  tf = missing_tfs,
+  ok = missing_tfs %in% names(cisbp_pwm_list)
+) |> dplyr::count(ok)
+
+
+# 1) Carga de recuperados manuales (por si aún no los tienes en el entorno)
+recovered <- vroom::vroom("extra_data/tfs_found_jaspar.txt", show_col_types = FALSE)
 
 manual_pfms <- recovered %>%
-  filter(!is.na(id_jaspar)) %>% 
+  filter(!is.na(id_jaspar)) %>%
   distinct(tf, id_jaspar) %>%
   mutate(
     pfm = map(id_jaspar, ~ {
-      ms <- getMatrixSet(JASPAR2022, opts = list(collection="CORE", tax_group="vertebrates", ID = .x))
+      ms <- TFBSTools::getMatrixSet(JASPAR2022, opts = list(collection="CORE", tax_group="vertebrates", ID = .x))
       ms[[.x]]
     })
   ) %>%
   select(tf, pfm) %>%
-  deframe() 
+  deframe()
 
-# Merge automatic and manual PFMs
-# If a TF appears in both, prefer the manually specified entry.
-pfm_list_extended <- c(
-  pfm_list[setdiff(names(pfm_list), names(manual_pfms))],
-  manual_pfms
+# 2) Asegura etiquetas de origen para todo
+tag_source <- function(x, src) {
+  if (is.null(x@tags$source)) x@tags$source <- src
+  x
+}
+pfm_list         <- imap(pfm_list,         ~ tag_source(.x, "JASPAR"))                # auto JASPAR
+manual_pfms      <- imap(manual_pfms,      ~ tag_source(.x, "JASPAR(manual)"))        # manual JASPAR
+cisbp_pwm_list   <- imap(cisbp_pwm_list,   ~ { .x@tags$source <- "CIS-BP"; .x })      # ya son PWMs; OK
+
+# 3) Convertir todo a PWM (si algo sigue en PFM)
+to_pwm_if_needed <- function(x) {
+  if (inherits(x, "PWMatrix")) return(x)
+  if (inherits(x, "PFMatrix")) return(TFBSTools::toPWM(x, pseudocounts = 0.2))
+  stop("Objeto de motivo no reconocido: ", class(x)[1])
+}
+pwm_jaspar_auto   <- imap(pfm_list,    ~ to_pwm_if_needed(.x))
+pwm_jaspar_manual <- imap(manual_pfms, ~ to_pwm_if_needed(.x))
+
+# 4) Unificación con prioridad: manual JASPAR > auto JASPAR > CIS-BP
+#    - Para evitar sobrescribir, construimos en orden inverso y dejamos que el último gane
+pwm_list_extended <- list()
+# base: CIS-BP (más baja prioridad)
+pwm_list_extended <- modifyList(pwm_list_extended, cisbp_pwm_list, keep.null = FALSE)
+# luego JASPAR auto (sobrescribe si existe en CIS-BP)
+pwm_list_extended <- modifyList(pwm_list_extended, pwm_jaspar_auto, keep.null = FALSE)
+# al final JASPAR manual (máxima prioridad)
+pwm_list_extended <- modifyList(pwm_list_extended, pwm_jaspar_manual, keep.null = FALSE)
+
+# 5) Resumen de cobertura
+found_tfs_all   <- sort(intersect(sign_tmrs, names(pwm_list_extended)))
+missing_after   <- setdiff(sign_tmrs, names(pwm_list_extended))
+
+coverage_tbl <- tibble(
+  total_sign_tmrs = length(sign_tmrs),
+  n_with_pwm      = length(found_tfs_all),
+  n_missing       = length(missing_after)
 )
 
-# Convert PFMs to PWMs
-pwm_list_extended <- map(pfm_list_extended, toPWM, pseudocounts = 0.1)
+message("Cobertura: ", coverage_tbl$n_with_pwm, "/", coverage_tbl$total_sign_tmrs,
+        " (faltan ", coverage_tbl$n_missing, ")")
 
-# Build a compact metadata table for bookkeeping and reproducibility
+# 6) ¿De dónde vino cada TF? (fuente efectiva usada)
+motif_source <- function(pwm) pwm@tags$source %||% NA_character_
+source_tbl <- tibble(
+  tf = found_tfs_all,
+  source = vapply(pwm_list_extended[found_tfs_all], motif_source, character(1))
+) %>%
+  mutate(source = ifelse(is.na(source), "UNKNOWN", source)) %>%
+  count(source, name = "n")
+
+# 7) ¿Cuáles de los 'missing_tfs' originales resolvió CIS-BP?
+resolved_by_cisbp <- intersect(names(cisbp_pwm_list), setdiff(sign_tmrs, names(pfm_list)))
+resolved_tbl <- tibble(
+  resolved_by_cisbp = length(resolved_by_cisbp),
+  still_missing     = length(missing_after)
+)
+
+# 8) Tabla de metadatos para reproducibilidad
 metadata_table <- purrr::imap_dfr(pwm_list_extended, function(pwm, tf) {
+  get_tag_chr <- function(x) {
+    if (is.null(x)) return(NA_character_)
+    as.character(x)
+  }
   tibble::tibble(
     tf         = tf,
-    id_jaspar  = TFBSTools::ID(pwm),
-    type       = pwm@tags$type %||% NA_character_,
-    collection = pwm@tags$collection %||% NA_character_,
-    species    = if (!is.null(pwm@tags$species)) paste(pwm@tags$species, collapse = ", ") else NA_character_
+    source     = get_tag_chr(pwm@tags$source),
+    id         = get_tag_chr(tryCatch(TFBSTools::ID(pwm),   error = function(e) NA_character_)),
+    name       = get_tag_chr(tryCatch(TFBSTools::name(pwm), error = function(e) NA_character_)),
+    motif_type = get_tag_chr(pwm@tags$motif_type),
+    tf_status  = get_tag_chr(pwm@tags$tf_status),
+    year       = get_tag_chr(pwm@tags$m_source_year),
+    file       = get_tag_chr(pwm@tags$file),
+    data_type  = get_tag_chr(pwm@tags$data_type)
   )
-}) %>%
-  dplyr::arrange(tf)
+}) %>% dplyr::arrange(tf)
 
-readr::write_tsv(metadata_table, file.path(outputsFolder, "motif_metadata.tsv"))
-print(metadata_table, n = nrow(metadata_table))
-# # A tibble: 28 × 5
-#    tf      id_jaspar type               collection  species
-#    <chr>   <chr>     <chr>              <chr>       <chr>
-#  1 FOXP2   MA0593.1  ChIP-seq           CORE        Homo sapiens
-#  2 TCFL5   MA0632.2  HT-SELEX           CORE        Homo sapiens
-#  3 TFCP2   MA1968.1  HT-SELEX           CORE        Homo sapiens
-#  4 SREBF1  MA0595.1  ChIP-seq           CORE        Homo sapiens
-#  5 PROX1   MA0794.1  HT-SELEX           CORE        Homo sapiens
-#  6 ETV4    MA0764.1  HT-SELEX           CORE        Homo sapiens
-#  7 TEAD4   MA0809.1  HT-SELEX           CORE        Homo sapiens
-#  8 RARA    MA0729.1  HT-SELEX           CORE        Homo sapiens
-#  9 RUNX2   MA0511.1  ChIP-seq           CORE        Homo sapiens
-# 10 ETV1    MA0761.1  HT-SELEX           CORE        Homo sapiens
-# 11 RXRG    MA0856.1  HT-SELEX           CORE        Homo sapiens
-# 12 RARB    MA1552.1  HT-SELEX           CORE        Homo sapiens
-# 13 BHLHE40 MA0464.2  HT-SELEX           CORE        Homo sapiens
-# 14 HEY2    MA0649.1  HT-SELEX           CORE        Homo sapiens
-# 15 ETV5    MA0765.1  HT-SELEX           CORE        Homo sapiens
-# 16 GLIS3   MA0737.1  HT-SELEX           CORE        Homo sapiens
-# 17 PLAG1   MA0163.1  bacterial 1-hybrid CORE        Homo sapiens
-# 18 ZKSCAN3 MA1973.1  NA                 CORE        Homo sapiens
-# 19 ZKSCAN5 MA1652.1  ChIP-seq           CORE        Homo sapiens
-# 20 PKNOX2  MA0783.1  HT-SELEX           CORE        Homo sapiens
-# 21 FOXE1   MA1487.1  HT-SELEX           CORE        Homo sapiens
-# 22 TFCP2L1 MA0145.2  ChIP-seq           CORE        Mus musculus
-# 23 SALL4   UN0262.1  ChIP-seq           UNVALIDATED Mus musculus
-# 24 FOXQ1   MA0040.1  SELEX              CORE        Rattus norvegicus
-# 25 MAFB    MA0117.2  HT-SELEX           CORE        Mus musculus
-# 26 CREB5   MA0840.1  HT-SELEX           CORE        Mus musculus
-# 27 ESRRG   MA0643.1  HT-SELEX           CORE        Mus musculus
-# 28 ZNF548  UN0333.1  ChIP-seq           UNVALIDATED Homo sapiens
+# 9) Persistir resultados
+dir.create(file.path(outputsFolder, "motifs"), showWarnings = FALSE, recursive = TRUE)
+readr::write_tsv(metadata_table, file.path(outputsFolder, "motifs", "motif_metadata_combined.tsv"))
+
+# Guardar la lista combinada en RDS
+saveRDS(pwm_list_extended, file.path(outputsFolder, "motifs", "pwm_list_extended_list.rds"))
+
 
 #############################################
 # 3) Obtaining promoter regions
@@ -349,7 +493,7 @@ print(tf_summary, n = 50)
 readr::write_tsv(tf_summary, paste0(outputsFolder, "interactions_summary.tsv"))
 
 #############################################
-# 6) Circos plot
+# 6) Only motif hits circos plot
 #############################################
 
 # Build interaction matrix in the exact TF order used in the summary
@@ -510,7 +654,9 @@ edge_df <- binding_hits_annot %>%
     )
   )
 
-# ========= 3) ARACNe network support =========
+#############################################
+# 8) ARACNe network support
+#############################################
 
 aracne_tcga <- read_tsv("tcga_tumor_network.txt") %>% 
       rename(tf = Regulator, target = Target, mi = MI)
@@ -566,7 +712,10 @@ color_mat[interaction_mat == 0] <- "transparent"
 
 grid_cols <- tf_colors
 
-# ========= 5) Circus drawing =========
+#############################################
+# 9) Expresión analysis
+#############################################
+
 circos.clear()
 circos.par(start.degree = 90, gap.degree = 1, track.margin = c(0.02, 0.02))
 
@@ -798,3 +947,89 @@ title("Circos plot of directional interactions among 50 thyroid Transcriptional 
 dev.off()
 
 
+# === EDGES =======================================================
+# Asegura que partimos sólo de columnas "limpias"
+edge_base <- edge_plot %>%
+  select(TF_from, TF_target, n_hits, aracne_support, mode) %>%
+  distinct()
+
+# Meta-info desde tmr_meta con nombres ya diferenciados
+meta_from <- tmr_meta %>%
+  transmute(tf = gene_name,
+            lfc_from = lfc_meta,
+            p_from   = p_meta_iv_adj,
+            dir_from = dir)
+
+meta_to <- tmr_meta %>%
+  transmute(tf = gene_name,
+            lfc_to = lfc_meta,
+            p_to   = p_meta_iv_adj,
+            dir_to = dir)
+
+edges_cyto <- edge_base %>%
+  left_join(meta_from, by = c("TF_from"   = "tf")) %>%
+  left_join(meta_to,   by = c("TF_target" = "tf")) %>%
+  mutate(weight = n_hits * aracne_support) %>%
+  filter(weight > 0) %>%
+  transmute(
+    source      = TF_from,
+    target      = TF_target,
+    interaction = "regulates",
+    directed    = TRUE,
+    weight,                 # = n_hits * soporte ARACNe
+    n_hits,
+    aracne_support,         # 1..2
+    mode,                   # possible_activation / possible_repression / uncertain
+    dir_from, dir_to,       # up / down
+    lfc_from, p_from,
+    lfc_to,   p_to
+  ) %>%
+  arrange(desc(weight))
+
+# === NODES =======================================================
+# Usa los TF presentes en la red final (más compacto para Cytoscape)
+tf_in_network <- sort(unique(c(edges_cyto$source, edges_cyto$target)))
+
+# Grados coherentes con la red final (si ya tienes interaction_mat, úsalo; si no, calcúlalo aquí)
+# Construimos una matriz  TF_from x TF_target desde edges_cyto (peso > 0)
+mat_obs <- xtabs(weight ~ source + target, data = edges_cyto) %>% as.matrix()
+
+# Out-/In-degree por existencia de arista (>0) y strengths por suma de pesos
+node_degrees <- tibble(tf = tf_in_network) %>%
+  mutate(
+    n_targets_mi = purrr::map_int(tf, ~ if (.x %in% rownames(mat_obs)) sum(mat_obs[.x, ] > 0) else 0L),
+    n_beaters_mi = purrr::map_int(tf, ~ if (.x %in% colnames(mat_obs)) sum(mat_obs[, .x] > 0) else 0L),
+    out_strength = purrr::map_dbl(tf, ~ if (.x %in% rownames(mat_obs)) sum(mat_obs[.x, ], na.rm = TRUE) else 0),
+    in_strength  = purrr::map_dbl(tf, ~ if (.x %in% colnames(mat_obs)) sum(mat_obs[, .x], na.rm = TRUE) else 0)
+  )
+
+# Posiciones promotoras (ajusta nombres si difieren)
+pos_info <- tss_upstream %>%
+  select(hgnc_symbol, chromosome_name, tss_promoter_start, tss_promoter_end, strand) %>%
+  mutate(chromosome = paste0("chr", chromosome_name)) %>%
+  transmute(
+    tf = hgnc_symbol,
+    chromosome,
+    promoter_start = tss_promoter_start,
+    promoter_end   = tss_promoter_end,
+    strand
+  ) %>%
+  distinct(tf, .keep_all = TRUE)
+
+nodes_cyto <- tibble(tf = tf_in_network) %>%
+  left_join(tmr_meta %>% select(gene_name, lfc_meta, p_meta_iv_adj, dir),
+            by = c("tf" = "gene_name")) %>%
+  left_join(node_degrees, by = "tf") %>%
+  left_join(pos_info,     by = "tf") %>%
+  transmute(
+    id = tf, label = tf,
+    lfc_meta, p_meta_iv_adj, dir,
+    n_targets_mi, n_beaters_mi,
+    out_strength, in_strength,
+    chromosome, promoter_start, promoter_end, strand
+  )
+
+# === EXPORTA =====================================================
+dir.create(paste0(outputsFolder, "cytoscape"), showWarnings = FALSE, recursive = TRUE)
+write_tsv(edges_cyto, paste0(outputsFolder, "cytoscape/edges_aracne_expr.tsv"))
+write_tsv(nodes_cyto, paste0(outputsFolder, "cytoscape/nodes_tf_meta_coords.tsv"))
