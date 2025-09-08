@@ -44,7 +44,10 @@ plotsFolder   <- file.path(outputsFolder, "plots/")
 dir.create(outputsFolder, showWarnings = FALSE, recursive = TRUE)
 dir.create(plotsFolder,   showWarnings = FALSE, recursive = TRUE)
 
-# utilidades
+# Load helper functions
+source("scripts/helpers.R")
+
+# utylities
 `%||%` <- function(a, b) if (is.null(a)) b else a
 
 #############################################
@@ -141,8 +144,6 @@ get_cisbp_motif_meta <- function(tf_symbol, cis_primary, cis_all = NULL, cis_plu
   choose_best_motif(cand)
 }
 
-
-
 try_read_one <- function(tf) {
   meta <- get_cisbp_motif_meta(tf, cis_primary, cis_all, cis_plus)
   if (is.null(meta) || is.null(meta$motif_id) ||
@@ -156,18 +157,15 @@ try_read_one <- function(tf) {
   tibble::tibble(tf=tf, motif_id=meta$motif_id, ok=TRUE, reason="ok")
 }
 
-audit <- purrr::map_dfr(missing_tfs, try_read_one)
-audit %>% count(ok, reason)
-audit %>% filter(!ok)
 
 # ---- CIS-BP configuration ----
 unzip("extra_data/Homo_sapiens_2025_08_23_3_48_am.zip")
 cisbp_dir <- "extra_data/Homo_sapiens_2025_08_23_3_48_am" 
 pwms_dir  <- file.path(cisbp_dir, "pwms_all_motifs")        # <-- confirms that it exists
 
-cis_primary <- vroom::vroom(tf_info_primary, delim="\t", col_types=cols(.default="c")) %>% janitor::clean_names()
-cis_all     <- if (file.exists(tf_info_all))  vroom::vroom(tf_info_all,  delim="\t", col_types=cols(.default="c")) %>% janitor::clean_names() else NULL
-cis_plus    <- if (file.exists(tf_info_plus)) vroom::vroom(tf_info_plus, delim="\t", col_types=cols(.default="c")) %>% janitor::clean_names() else NULL
+cis_primary <- vroom::vroom(paste0(cisbp_dir, "/TF_Information.txt"), delim="\t", col_types=cols(.default="c")) %>% janitor::clean_names()
+cis_all     <- vroom::vroom(paste0(cisbp_dir, "/TF_Information_all_motifs.txt"),  delim="\t", col_types=cols(.default="c")) %>% janitor::clean_names()
+cis_plus    <- vroom::vroom(paste0(cisbp_dir, "/TF_Information_all_motifs_plus.txt"), delim="\t", col_types=cols(.default="c")) %>% janitor::clean_names()
 
 cisbp_pwm_list <- purrr::map(missing_tfs, function(tf) {
   meta <- get_cisbp_motif_meta(tf, cis_primary, cis_all, cis_plus)
@@ -189,6 +187,10 @@ cisbp_pwm_list <- purrr::map(missing_tfs, function(tf) {
 }) %>%
   rlang::set_names(missing_tfs) %>%
   purrr::compact()
+
+audit <- purrr::map_dfr(missing_tfs, try_read_one)
+audit %>% count(ok, reason)
+audit %>% filter(!ok)
 
 
 data.frame(
@@ -250,8 +252,8 @@ coverage_tbl <- tibble(
   n_missing       = length(missing_after)
 )
 
-message("Cobertura: ", coverage_tbl$n_with_pwm, "/", coverage_tbl$total_sign_tmrs,
-        " (faltan ", coverage_tbl$n_missing, ")")
+message("Founds: ", coverage_tbl$n_with_pwm, "/", coverage_tbl$total_sign_tmrs,
+        " (missing ", coverage_tbl$n_missing, ")")
 
 # 6) effective source used
 motif_source <- function(pwm) pwm@tags$source %||% NA_character_
@@ -356,7 +358,7 @@ names(promoter_seqs) <- paste0(
   strand(promoter_gr)
 )
 
-# (Optional) Save promoters as FASTA for external use
+# Save promoters as FASTA for external use
 # Biostrings::writeXStringSet(promoter_seqs, filepath = file.path(outputsFolder, "promoters_50tmrs_hg38.fa"))
 
 #############################################

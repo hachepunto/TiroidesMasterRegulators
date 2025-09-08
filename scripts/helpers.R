@@ -380,3 +380,136 @@ regulon2sif_tbl <- function(regulon){
  }
  return(sif)
 }
+
+
+#' Read a PFM file from CIS-BP and convert it to a PFMatrix object
+#'
+#' This function attempts to parse a Position Frequency Matrix (PFM) file from
+#' the CIS-BP bulk download. It supports both the "standard" format with
+#' A/C/G/T headers and fallback parsing when headers are missing or malformed.
+#' The function automatically distinguishes between frequency matrices (values <= 1)
+#' and count matrices (values > 1), and scales frequencies to integer counts.
+#'
+#' @param motif_id  Character. Motif identifier (e.g. "M05089_3.00").
+#' @param pwms_dir  Character. Path to the directory containing CIS-BP PFM files.
+#' @param scale     Integer. Scaling factor for frequency matrices (default = 100).
+#' @param verbose   Logical. If TRUE, prints messages when files cannot be read.
+#'
+#' @return A TFBSTools::PFMatrix object, or NULL if parsing fails.
+#'
+read_cisbp_pfm <- function(motif_id, pwms_dir, scale = 100, verbose = TRUE) {
+  # Build file path (try both "motif_id.txt" and "motif_id")
+  f <- file.path(pwms_dir, paste0(motif_id, ".txt"))
+  if (!file.exists(f)) {
+    f <- file.path(pwms_dir, motif_id)
+    if (!file.exists(f)) {
+      if (verbose) message("File not found: ", motif_id)
+      return(NULL)
+    }
+  }
+  
+  mat <- NULL
+  
+  # --- Attempt to read with proper headers (A/C/G/T) ---
+  suppressWarnings({
+    df <- try(readr::read_tsv(f, col_types = readr::cols(.default="d"), progress = FALSE),
+              silent = TRUE)
+  })
+  
+  if (!inherits(df, "try-error") && all(c("A","C","G","T") %in% names(df))) {
+    mat <- t(as.matrix(df[, c("A","C","G","T")]))
+    rownames(mat) <- c("A","C","G","T")
+  }
+  
+  # --- Fallback: parse as raw numeric text without headers ---
+  if (is.null(mat)) {
+    raw <- readLines(f, warn = FALSE)
+    raw <- raw[!grepl("^\\s*(#|;|$)", raw)]   # remove comments and empty lines
+    if (!length(raw)) return(NULL)
+    if (grepl("[A-Za-z]", raw[1])) raw <- raw[-1]  # drop header line if it has letters
+    if (!length(raw)) return(NULL)
+    
+    # Tokenize rows into numeric values
+    tok <- strsplit(raw, "\\s+")
+    maxlen <- max(lengths(tok))
+    tok <- lapply(tok, function(x){ length(x) <- maxlen; x })
+    dfx <- as.data.frame(do.call(rbind, tok), stringsAsFactors = FALSE)
+    
+    # Detect numeric columns
+    is_num <- function(x) grepl("^[-+]?\\d*\\.?\\d+(e[-+]?\\d+)?$", x, ignore.case = TRUE)
+    num_frac <- vapply(dfx, function(col) mean(is_num(col), na.rm = TRUE), numeric(1))
+    ord <- order(num_frac, decreasing = TRUE)
+    idx4 <- if (length(ord) >= 5) tail(ord, 4L) else head(ord, 4L)
+    
+    if (length(idx4) < 4 || any(num_frac[idx4] < 0.8)) return(NULL)
+    
+    mat_raw <- apply(dfx[, idx4, drop = FALSE], 2, as.numeric)
+    if (ncol(mat_raw) == 4) mat_raw <- t(mat_raw)
+    if (nrow(mat_raw) != 4 || ncol(mat_raw) < 1) return(NULL)
+    
+    rownames(mat_raw) <- c("A","C","G","T")
+    mat <- mat_raw
+  }
+  
+  # --- Final checks ---
+  if (is.null(mat) || nrow(mat) != 4 || ncol(mat) < 1 || !all(is.finite(mat))) return(NULL)
+  maxv <- suppressWarnings(max(mat))
+  if (!is.finite(maxv)) return(NULL)
+  
+  # --- Frequency vs counts ---
+  if (maxv <= 1.000001) {
+    # Normalize columns to sum 1 if slightly off
+    if (any(abs(colSums(mat) - 1) > 1e-6)) {
+      mat <- apply(mat, 2, function(col) col / sum(col))
+    }
+    mc <- round(mat * scale)
+    storage.mode(mc) <- "integer"
+    dtype <- "freq->counts"
+  } else {
+    mc <- round(mat)
+    storage.mode(mc) <- "integer"
+    dtype <- "counts"
+  }
+  
+  # --- Build PFMatrix object ---
+  pfm <- TFBSTools::PFMatrix(ID = motif_id, name = motif_id,
+                             strand = "+", profileMatrix = mc)
+  pfm@tags$source      <- "CIS-BP"
+  pfm@tags$file        <- basename(f)
+  pfm@tags$data_type   <- dtype
+  pfm@tags$count_scale <- if (dtype == "freq->counts") scale else NA_integer_
+  pfm
+}
+
+# Minimal version: return raw numeric matrix instead of PFMatrix
+read_cisbp_pfm_debug <- function(motif_id, pwms_dir, scale = 100, verbose = TRUE) {
+  f <- file.path(pwms_dir, paste0(motif_id, ".txt"))
+  if (!file.exists(f)) f <- file.path(pwms_dir, motif_id)
+  if (!file.exists(f)) {
+    if (verbose) message("File not found: ", motif_id)
+    return(NULL)
+  }
+  
+  df <- try(readr::read_tsv(f, col_types = readr::cols(.default="d"), progress = FALSE), silent = TRUE)
+  
+  if (!inherits(df, "try-error") && all(c("A","C","G","T") %in% names(df))) {
+    mat <- t(as.matrix(df[, c("A","C","G","T")]))
+    rownames(mat) <- c("A","C","G","T")
+  } else {
+    raw <- readLines(f, warn = FALSE)
+    raw <- raw[!grepl("^\\s*(#|;|$)", raw)]
+    if (length(raw) == 0) return(NULL)
+    if (grepl("[A-Za-z]", raw[1])) raw <- raw[-1]
+    if (length(raw) == 0) return(NULL)
+    tok <- strsplit(raw, "\\s+")
+    maxlen <- max(lengths(tok))
+    tok <- lapply(tok, function(x){ length(x) <- maxlen; x })
+    dfx <- as.data.frame(do.call(rbind, tok), stringsAsFactors = FALSE)
+    mat <- apply(dfx, 2, as.numeric)
+    if (ncol(mat) == 4) mat <- t(mat)
+    rownames(mat) <- c("A","C","G","T")
+  }
+  
+  if (is.null(mat) || !all(is.finite(mat))) return(NULL)
+  mat
+}
