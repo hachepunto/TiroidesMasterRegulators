@@ -589,7 +589,7 @@ filt_go_meta_byTF <- go_meta_byTF %>%
   full_label = factor(full_label, levels = unique(full_label))
  )
 
-
+write_tsv(filt_go_meta_byTF, paste0(outputsFolder, "meta_go_byTF.tsv"))
 ######################################################################################
 
 
@@ -676,6 +676,7 @@ filt_kegg_meta_byTF <- kegg_meta_byTF %>%
   full_label = factor(full_label, levels = unique(full_label))
  )
 
+write_tsv(filt_kegg_meta_byTF, paste0(outputsFolder, "meta_kegg_byTF.tsv"))
 ######################################################################################
 
 meta_kegg_bar_plot_byTF <- ggplot(filt_kegg_meta_byTF, aes(x = full_label, y = mean_enrichment, fill = meta_padj)) +
@@ -769,6 +770,7 @@ filt_kegg_meta_all_targets <- kegg_meta_all_targets %>%
   full_label = factor(full_label, levels = unique(full_label))
  )
 
+write_tsv(filt_kegg_meta_all_targets, paste0(outputsFolder, "meta_kegg_all.tsv"))
 ######################################################################################
 
 meta_kegg_bar_plot_all_targets <- ggplot(filt_kegg_meta_all_targets, aes(x = full_label, y = mean_enrichment, fill = meta_padj)) +
