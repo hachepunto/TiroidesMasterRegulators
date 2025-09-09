@@ -419,7 +419,7 @@ binding_hits_annot <- binding_hits2 %>%
   dplyr::select(TF_from, TF_target, chromosome, genomic_start, genomic_end, everything())
 
 # Save tabular outputs
-readr::write_tsv(binding_hits_annot, paste0(outputsFolder,"binding_all50x28.tsv"))
+readr::write_tsv(binding_hits_annot, paste0(outputsFolder,"binding_all50x37_only_motifs.tsv"))
 
 #############################################
 # 5) Summary table
@@ -492,7 +492,7 @@ tf_summary <- tf_summary %>%
 
 # Save and preview
 print(tf_summary, n = 50)
-readr::write_tsv(tf_summary, paste0(outputsFolder, "interactions_summary.tsv"))
+readr::write_tsv(tf_summary, paste0(outputsFolder, "interactions_summary_only_motifs.tsv"))
 
 #############################################
 # 6) Only motif hits circos plot
@@ -702,6 +702,10 @@ full_mat[common_r, common_c] <- mat_obs[common_r, common_c]
 
 interaction_mat <- full_mat
 
+#############################################
+# 9) Circus plot ARACNe support
+#############################################
+
 base_pal <- colorRampPalette(brewer.pal(11, "Spectral"))(length(tf_order))
 set.seed(42)
 tf_colors <- setNames(sample(base_pal), tf_order)
@@ -713,10 +717,6 @@ color_mat <- matrix(tf_colors[rownames(interaction_mat)],
 color_mat[interaction_mat == 0] <- "transparent"
 
 grid_cols <- tf_colors
-
-#############################################
-# 9) Expresión analysis
-#############################################
 
 circos.clear()
 circos.par(start.degree = 90, gap.degree = 1, track.margin = c(0.02, 0.02))
