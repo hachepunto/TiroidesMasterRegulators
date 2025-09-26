@@ -161,7 +161,7 @@ try_read_one <- function(tf) {
 # ---- CIS-BP configuration ----
 unzip("extra_data/Homo_sapiens_2025_08_23_3_48_am.zip")
 cisbp_dir <- "extra_data/Homo_sapiens_2025_08_23_3_48_am" 
-pwms_dir  <- file.path(cisbp_dir, "pwms_all_motifs")        # <-- confirms that it exists
+pwms_dir  <- file.path(cisbp_dir, "pwms_all_motifs")
 
 cis_primary <- vroom::vroom(paste0(cisbp_dir, "/TF_Information.txt"), delim="\t", col_types=cols(.default="c")) %>% janitor::clean_names()
 cis_all     <- vroom::vroom(paste0(cisbp_dir, "/TF_Information_all_motifs.txt"),  delim="\t", col_types=cols(.default="c")) %>% janitor::clean_names()
@@ -388,9 +388,6 @@ search_pair <- function(TF_from, TF_to) {
 # 3. Execute scans over all pairs and bind results
 binding_hits <- combos %>%
   pmap_dfr(~ search_pair(..1, ..2))
-
-# binding_hits es un tibble con columnas:
-#   start, end, strand, score, ... plus TF_from y TF_to
 
 tss_up2 <- tss_upstream
 colnames(tss_up2)[ colnames(tss_up2) == "strand" ] <- "strand_tss"
@@ -742,7 +739,7 @@ chordDiagram(
 
 # ========= 6) Outer ring: meta-direction (up/down) =========
 
-dir_cols <- c(up = "#E41A1C", down = "#377EB8")  # red=up, blue=down
+dir_cols <- c(up = "#ca0020", down = "#0571b0")  # red=up, blue=down
 names(dir_cols) <- names(dir_cols)
 
 old_pad <- circos.par("cell.padding")
@@ -1031,7 +1028,7 @@ nodes_cyto <- tibble(tf = tf_in_network) %>%
     chromosome, promoter_start, promoter_end, strand
   )
 
-# === EXPORTA =====================================================
+# === EXPORT =====================================================
 dir.create(paste0(outputsFolder, "cytoscape"), showWarnings = FALSE, recursive = TRUE)
 write_tsv(edges_cyto, paste0(outputsFolder, "cytoscape/edges_aracne_expr.tsv"))
 write_tsv(nodes_cyto, paste0(outputsFolder, "cytoscape/nodes_tf_meta_coords.tsv"))

@@ -3,7 +3,7 @@
 # Hugo Tovar, National Institute of Genomic Medicine, Mexico
 
 #############################################
-# 1. Load master regulator results and perform meta-analysis
+# 1. Load required libraries and set up folders
 #############################################
 
 suppressPackageStartupMessages({
@@ -29,7 +29,7 @@ dir.create(outputsFolder, showWarnings = FALSE)
 dir.create(plotsFolder, showWarnings = FALSE)
 
 #############################################
-# 2. Join TCGA and GEO MRA results compute combined p-values using Fisher's method
+# 2. Load master regulator results and perform meta-analysis
 #############################################
 
 # Load VIPER MRA results for TCGA and GEO
@@ -91,7 +91,7 @@ dev.off()
 # 3. Shadow significative TMRs
 #############################################
 
-# Cargar objetos VIPER con regulones completos
+# load VIPER objects
 tcga_mrs <- readRDS("rds/tcga_mrs.rds")
 geo_mrs <- readRDS("rds/geo_mrs.rds")
 
@@ -104,8 +104,6 @@ tmrs_vector <- meta_results %>%
  filter(meta_padj < 0.05) %>%
  pull(tf)
 
-
-# Aplicar a todos los TMRs validados por meta-análisis
 tmr_shadow_df <- purrr::map_dfr(tmrs_vector, function(tf) {
  tryCatch({
   targets <- find_consensus_targets(tf, tmrs_vector, regulon_tcga, regulon_geo)
@@ -137,7 +135,7 @@ dev.off()
 # 4. Meta-Regulon
 #############################################
 
-# Construimos el regulón combinado solo para los TMRs validados
+# Built the combined regulon only for the validated TMRs.
 meta_regulon <- purrr::compact(purrr::map(setNames(tmrs_vector, tmrs_vector), 
                      ~build_meta_regulon(.x, regulon_tcga, regulon_geo)))
 
