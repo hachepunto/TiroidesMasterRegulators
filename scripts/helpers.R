@@ -513,3 +513,51 @@ read_cisbp_pfm_debug <- function(motif_id, pwms_dir, scale = 100, verbose = TRUE
   if (is.null(mat) || !all(is.finite(mat))) return(NULL)
   mat
 }
+
+
+
+# Extrae el data.frame @result de un gseaResult o de una lista con $gsea_result
+get_gsea_df <- function(x) {
+  if (inherits(x, "gseaResult")) {
+    as_tibble(x@result)
+  } else if (is.list(x) && inherits(x$gsea_result, "gseaResult")) {
+    as_tibble(x$gsea_result@result)
+  } else {
+    stop("Se esperaba un 'gseaResult' o una lista con $gsea_result.")
+  }
+}
+
+# Selecciona/renombra columnas esenciales y agrega sufijo del dataset
+select_gsea_cols <- function(df, is_go = FALSE, suffix = c("geo","tcga")) {
+  suf <- match.arg(suffix)
+  base_cols <- c("ID","Description","NES","pvalue","p.adjust")
+  if (is_go) {
+    df %>%
+      select(ONTOLOGY, all_of(base_cols)) %>%
+      rename_with(~ paste0(.x, "_", suf), c("NES","pvalue","p.adjust"))
+  } else {
+    df %>%
+      select(all_of(base_cols)) %>%
+      rename_with(~ paste0(.x, "_", suf), c("NES","pvalue","p.adjust"))
+  }
+}
+
+# Full join + Fisher + métricas comunes
+combine_two_gsea <- function(df_geo, df_tcga, keys) {
+  full_join(df_geo, df_tcga, by = keys) %>%
+    # Fisher con p-values crudos
+    rowwise() %>%
+    mutate(
+      meta_pval = if (is.finite(pvalue_geo) && is.finite(pvalue_tcga)) {
+        metap::sumlog(c(pvalue_geo, pvalue_tcga))$p
+      } else NA_real_
+    ) %>%
+    ungroup() %>%
+    mutate(
+      meta_padj       = p.adjust(meta_pval, method = "fdr"),
+      log10_meta_pval = -log10(meta_pval),
+      mean_NES        = rowMeans(cbind(NES_geo, NES_tcga), na.rm = TRUE),
+      concordant_sign = is.finite(NES_geo) & is.finite(NES_tcga) &
+                        (sign(NES_geo) == sign(NES_tcga))
+    )
+}

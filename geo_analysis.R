@@ -26,6 +26,7 @@ suppressPackageStartupMessages({
   library(gplots)
   library(GEOquery)
 })
+
 # Load helper functions
 source("scripts/helpers.R")
 
@@ -308,6 +309,9 @@ pdf(paste0(plotsFolder, "geo_gsea_go.pdf"), width = 12, height = 15)
 plot_ridge_panels(gsea_go_out$gsea_result, 20, title = "GEO GSEA GO Ridgeplot")
 dev.off()
 
+# Save GO RDS
+saveRDS(gsea_go_out, paste0(rdsFolder, "geo_gsea_go.rds"))
+
 # Run GSEA for KEGG
 kegg_gsea <- gseKEGG(geneList = gsea_go_out$gene_list,
                      organism = "hsa",
@@ -322,6 +326,66 @@ pdf(paste0(plotsFolder, "geo_gsea_kegg.pdf"), width = 12, height = 15)
 ridgeplot(kegg_gsea, showCategory = 20, fill = "p.adjust") +
   ggtitle("GEO GSEA KEGG Ridgeplot")
 dev.off()
+
+# Save KEGG RDS
+saveRDS(kegg_gsea, paste0(rdsFolder, "geo_gsea_kegg.rds"))
+
+
+# Run GSEA: Hallmarks (MSigDB) using clusterProfiler
+# Load Hallmark data (GSEA Broad GMT)
+hallmark_gmt <- read.gmt("extra_data/h.all.v2025.1.Hs.symbols.gmt")
+hallmark_names <- read_tsv("extra_data/hallmarks_names.txt")
+
+rank_sym_geo <- gsea_go_out$gene_mapping %>%
+  inner_join(
+    AnnotationDbi::select(org.Hs.eg.db,
+                          keys   = unique(.$ENTREZID),
+                          keytype= "ENTREZID",
+                          columns= "SYMBOL") %>% as_tibble(),
+    by = "ENTREZID"
+  ) %>%
+  filter(!is.na(SYMBOL)) %>%
+  mutate(SYMBOL = toupper(SYMBOL)) %>%
+  group_by(SYMBOL) %>%
+  summarize(logFC = mean(logFC), .groups = "drop") %>%
+  arrange(desc(logFC))
+
+gene_list_sym_geo <- rank_sym_geo$logFC
+names(gene_list_sym_geo) <- rank_sym_geo$SYMBOL
+gene_list_sym_geo <- sort(gene_list_sym_geo, decreasing = TRUE)
+
+# 2) Asegurar TERM2GENE/TERM2NAME en formato limpio
+hallmark_t2g <- hallmark_gmt %>%
+  as_tibble() %>%
+  transmute(term = as.character(term), gene = toupper(gene)) %>%
+  distinct(term, gene)
+
+hallmark_t2n <- hallmark_names %>%
+  transmute(term = ID, name = label_ready)
+
+# 3) Correr GSEA con símbolos
+gsea_hallmark_geo <- clusterProfiler::GSEA(
+  geneList     = gene_list_sym_geo,   # <-- ahora SYMBOL
+  TERM2GENE    = hallmark_t2g,
+  TERM2NAME    = hallmark_t2n,
+  pvalueCutoff = 1,
+  verbose      = FALSE
+)
+
+readr::write_tsv(as.data.frame(gsea_hallmark_geo@result),
+                   file = paste0(outputsFolder, "geo_gsea_hallmarks.tsv"))
+
+pdf(paste0(plotsFolder, "geo_gsea_hallmarks.pdf"), width = 10, height = 8)
+print(enrichplot::ridgeplot(gsea_hallmark_geo, showCategory = 20, fill = "p.adjust") +
+ggplot2::ggtitle("GEO GSEA Hallmarks (Top 20)"))
+dev.off()
+
+ggsave(filename = paste0(plotsFolder, "geo_gsea_hallmarks.png"),
+         plot     = enrichplot::ridgeplot(gsea_hallmark_geo, showCategory = 20, fill = "p.adjust") +
+                    ggplot2::ggtitle("GEO GSEA Hallmarks (Top 20)"),
+         width = 10, height = 8, dpi = 300)
+
+saveRDS(gsea_hallmark_geo, paste0(rdsFolder, "geo_gsea_hallmarks.rds"))
 
 #############################################
 # 7. Master Regulator Analysis (VIPER)

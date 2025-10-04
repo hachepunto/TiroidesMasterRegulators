@@ -8,6 +8,8 @@
 
 suppressPackageStartupMessages({
  library(tidyverse)
+ library(tibble)
+ library(magrittr)
  library(metap)
  library(EnhancedVolcano)
  library(viper)
@@ -16,6 +18,7 @@ suppressPackageStartupMessages({
  library(ggtext)
  library(ComplexUpset)
  library(ggplot2)
+ library(scales)
  library(cowplot)
 })
 
@@ -27,6 +30,170 @@ outputsFolder <- paste0(getwd(), "/meta_results/")
 plotsFolder <- paste0(getwd(), "/meta_results/plots/")
 dir.create(outputsFolder, showWarnings = FALSE)
 dir.create(plotsFolder, showWarnings = FALSE)
+
+#############################################
+# 2. Load GSEA results and perform meta-analysis
+#############################################
+
+tcga_gsea_go <- readRDS("rds/tcga_gsea_go.rds")
+tcga_gsea_kegg <- readRDS("rds/tcga_gsea_kegg.rds")
+tcga_gsea_hallmarks <- readRDS("rds/tcga_gsea_hallmarks.rds")
+geo_gsea_go <- readRDS("rds/geo_gsea_go.rds")
+geo_gsea_kegg <- readRDS("rds/geo_gsea_kegg.rds")
+geo_gsea_hallmarks  <- readRDS("rds/geo_gsea_hallmarks.rds")
+
+# ------------ GO ------------
+tcga_go_df <- get_gsea_df(tcga_gsea_go)  %>% select_gsea_cols(is_go = TRUE,  suffix = "tcga")
+geo_go_df  <- get_gsea_df(geo_gsea_go)   %>% select_gsea_cols(is_go = TRUE,  suffix = "geo")
+
+go_meta <- combine_two_gsea(
+  df_geo  = geo_go_df,
+  df_tcga = tcga_go_df,
+  keys    = c("ONTOLOGY","ID","Description")
+)
+
+filt_go_meta <- go_meta %>%
+  filter(!is.na(meta_pval),
+         meta_padj < 0.05,
+         concordant_sign) %>%
+  arrange(desc(abs(mean_NES)), Description) %>%
+  mutate(
+    full_label = paste(ONTOLOGY, Description, sep = ": "),
+    full_label = factor(full_label, levels = unique(full_label))
+  )
+
+write_tsv(filt_go_meta, file.path(outputsFolder, "meta_gsea_GO.tsv"))
+
+go_top <- filt_go_meta %>%
+  filter(is.finite(meta_padj), is.finite(mean_NES)) %>%
+  arrange(desc(abs(mean_NES))) %>%
+  slice_head(n = 30) %>%
+  mutate(term = full_label) %>%
+  mutate(term = factor(term, levels = rev(unique(term))))
+
+p_go <- ggplot(go_top, aes(x = mean_NES, y = term)) +
+  geom_segment(aes(x = 0, xend = mean_NES, y = term, yend = term),
+               linewidth = 1.0, color = "grey60") +
+  geom_point(aes(color = meta_padj), size = 3) +
+  geom_vline(xintercept = 0, linetype = "dashed", linewidth = 0.4, color = "grey50") +
+  scale_color_gradient(low = "#2c7fb8", high = "#253494", trans = "reverse",
+                       name = "Meta-adjusted p-value") +
+  labs(title = "Meta-GSEA GO (TCGA + GEO)", x = "Mean NES", y = NULL) +
+  theme_minimal(base_size = 13) +
+  theme(panel.grid.major.y = element_blank(),
+        panel.grid.minor   = element_blank(),
+        axis.text.y        = element_text(size = 8),
+        axis.text.x        = element_text(size = 8),
+        legend.position    = "right",
+        plot.title         = element_text(face = "bold", size = 15))
+
+ggsave(file.path(plotsFolder, "meta_gsea_GO_lollipop.pdf"), p_go, width = 16, height = 4, units = "in")
+ggsave(file.path(plotsFolder, "meta_gsea_GO_lollipop.png"), p_go, width = 16, height = 4, units = "in", dpi = 300)
+
+
+# ------------ KEGG ------------
+tcga_kegg_df <- get_gsea_df(tcga_gsea_kegg) %>% select_gsea_cols(is_go = FALSE, suffix = "tcga")
+geo_kegg_df  <- get_gsea_df(geo_gsea_kegg)  %>% select_gsea_cols(is_go = FALSE, suffix = "geo")
+
+kegg_meta <- combine_two_gsea(
+  df_geo  = geo_kegg_df,
+  df_tcga = tcga_kegg_df,
+  keys    = c("ID","Description")
+)
+
+filt_kegg_meta <- kegg_meta %>%
+  filter(!is.na(meta_pval),
+         meta_padj < 0.05,
+         concordant_sign) %>%
+  arrange(desc(abs(mean_NES)), Description) %>%
+  mutate(
+    full_label = factor(Description, levels = unique(Description))
+  )
+
+write_tsv(filt_kegg_meta, file.path(outputsFolder, "meta_gsea_KEGG.tsv"))
+
+kegg_top <- filt_kegg_meta %>%
+  filter(is.finite(meta_padj), is.finite(mean_NES)) %>%
+  arrange(desc(abs(mean_NES))) %>%
+  slice_head(n = 30) %>%
+  mutate(term = full_label) %>% 
+  mutate(term = factor(term, levels = rev(unique(term))))
+
+p_kegg <- ggplot(kegg_top, aes(x = mean_NES, y = term)) +
+  geom_segment(aes(x = 0, xend = mean_NES, y = term, yend = term),
+               linewidth = 1.0, color = "grey60") +
+  geom_point(aes(color = meta_padj), size = 3) +
+  geom_vline(xintercept = 0, linetype = "dashed", linewidth = 0.4, color = "grey50") +
+  scale_color_gradient(low = "#2c7fb8", high = "#253494", trans = "reverse",
+                       name = "Meta-adjusted p-value") +
+  labs(title = "Meta-GSEA KEGG (TCGA + GEO)", x = "Mean NES", y = NULL) +
+  theme_minimal(base_size = 13) +
+  theme(panel.grid.major.y = element_blank(),
+        panel.grid.minor   = element_blank(),
+        axis.text.y        = element_text(size = 8),
+        axis.text.x        = element_text(size = 8),
+        legend.position    = "right",
+        plot.title         = element_text(face = "bold", size = 15))
+
+ggsave(file.path(plotsFolder, "meta_gsea_KEGG_lollipop.pdf"), p_kegg, width = 16, height = 4, units = "in")
+ggsave(file.path(plotsFolder, "meta_gsea_KEGG_lollipop.png"), p_kegg, width = 16, height = 4, units = "in", dpi = 300)
+
+# ------------ HALLMARKS ------------
+# Load Hallmark data (GSEA Broad GMT)
+hallmark_gmt <- read.gmt("extra_data/h.all.v2025.1.Hs.symbols.gmt")
+hallmark_names <- read_tsv("extra_data/hallmarks_names.txt")
+
+tcga_hm_df <- get_gsea_df(tcga_gsea_hallmarks) %>%
+  select_gsea_cols(is_go = FALSE, suffix = "tcga")
+
+geo_hm_df  <- get_gsea_df(geo_gsea_hallmarks) %>%
+  select_gsea_cols(is_go = FALSE, suffix = "geo")
+
+hallmarks_meta <- combine_two_gsea(
+  df_geo  = geo_hm_df,
+  df_tcga = tcga_hm_df,
+  keys    = c("ID","Description")   # no ONTOLOGY en Hallmarks
+)
+
+# Nombres "bonitos" si los tienes en hallmark_names (ID -> label_ready)
+filt_hallmarks_meta <- hallmarks_meta %>%
+  dplyr::filter(!is.na(meta_pval),
+                meta_padj < 0.05,
+                concordant_sign) %>%
+  dplyr::left_join(hallmark_names, by = "ID") %>%
+  dplyr::mutate(label = dplyr::coalesce(label_ready, Description),
+                full_label = factor(label, levels = unique(label))) %>%
+  dplyr::arrange(desc(abs(mean_NES)), label)
+
+readr::write_tsv(filt_hallmarks_meta, file.path(outputsFolder, "meta_gsea_HALLMARKS.tsv"))
+
+
+hallm_top <- filt_hallmarks_meta %>%
+  filter(is.finite(meta_padj), is.finite(mean_NES)) %>%
+  arrange(desc(abs(mean_NES))) %>%
+  slice_head(n = 30) %>%
+  mutate(term = full_label) %>%  
+  mutate(term = factor(term, levels = rev(unique(term))))
+
+p_hallm <- ggplot(hallm_top, aes(x = mean_NES, y = term)) +
+  geom_segment(aes(x = 0, xend = mean_NES, y = term, yend = term),
+               linewidth = 1.0, color = "grey60") +
+  geom_point(aes(color = meta_padj), size = 3) +
+  geom_vline(xintercept = 0, linetype = "dashed", linewidth = 0.4, color = "grey50") +
+  scale_color_gradient(low = "#2c7fb8", high = "#253494", trans = "reverse",
+                       name = "Meta-adjusted p-value") +
+  labs(title = "Meta-GSEA Hallmarks (TCGA + GEO)", x = "Mean NES", y = NULL) +
+  theme_minimal(base_size = 13) +
+  theme(panel.grid.major.y = element_blank(),
+        panel.grid.minor   = element_blank(),
+        axis.text.y        = element_text(size = 8),
+        axis.text.x        = element_text(size = 8),
+        legend.position    = "right",
+        plot.title         = element_text(face = "bold", size = 15))
+
+ggsave(file.path(plotsFolder, "meta_gsea_HALLMARKS_lollipop.pdf"), p_hallm, width = 16, height = 4, units = "in")
+ggsave(file.path(plotsFolder, "meta_gsea_HALLMARKS_lollipop.png"), p_hallm, width = 16, height = 4, units = "in", dpi = 300)
+
 
 #############################################
 # 2. Load master regulator results and perform meta-analysis
@@ -152,10 +319,6 @@ write_tsv(meta_reg_stats, paste0(outputsFolder, "shared_tarjets_by_tmr.tsv"))
 #############################################
 # 9. ORA: Hallmark enrichment with MSigDB gene sets
 #############################################
-
-# Load Hallmark data (GSEA Broad GMT)
-hallmark_gmt <- read.gmt("extra_data/h.all.v2025.1.Hs.symbols.gmt")
-hallmark_names <- read_tsv("extra_data/hallmarks_names.txt")
 
 # ----------------------------
 # TCGA data
