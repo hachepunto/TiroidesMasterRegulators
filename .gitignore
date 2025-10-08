@@ -71,9 +71,9 @@ missing_tfs.txt
 
 # Rdata sessions
 tmr_motifs.RData
-GEO_session.RData
-TCGA_session.RData
-meta_analysis_session.RData
+geo_session.RData
+tcga_session.RData
+meta_session.RData
 
 # MacOS files
 *.DS_Store

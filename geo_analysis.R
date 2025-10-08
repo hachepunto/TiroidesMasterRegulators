@@ -422,4 +422,4 @@ plot(mrs, 20, density = 100, color = c("#0571b0", "#ca0020"),
 dev.off()
 
 
-# save.image("GEO_session.RData")
+# save.image("geo_session.RData")

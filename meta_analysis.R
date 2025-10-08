@@ -20,6 +20,10 @@ suppressPackageStartupMessages({
  library(ggplot2)
  library(scales)
  library(cowplot)
+ library(patchwork)
+ library(dplyr)
+ library(tidyr)
+ library(grid)
 })
 
 # Load helper functions
@@ -435,6 +439,41 @@ meta_hallm_byTF_barplot <- ggplot(filt_hallm_meta_byTF, aes(x = full_label, y = 
   plot.caption = element_text(size = 10, face = "italic")
  )
 
+# LOLLIPOP para meta hallmarks por TF
+meta_hallm_byTF_lollipop <- ggplot(
+  filt_hallm_meta_byTF,
+  aes(x = full_label, y = mean_enrichment)
+) +
+  geom_segment(aes(xend = full_label, y = 0, yend = mean_enrichment),
+               linewidth = 0.9, color = "grey60") +
+  geom_point(aes(color = meta_padj),
+             size = 3.4, stroke = 0.2) +
+  coord_flip() +
+  scale_color_gradient(
+    low = "#2c7fb8", high = "#253494",
+    name = "Meta-adjusted\np-value",
+    trans = "reverse"
+  ) +
+  labs(
+    title = "Hallmark pathway enrichment across TMR regulons",
+    subtitle = "Pathways with meta-adjusted p-value < 0.05",
+    x = NULL,
+    y = "Average fold enrichment",
+    caption = "Data from GEO and TCGA"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    axis.text.y = element_markdown(size = 8),
+    axis.text.x = element_text(size = 10),
+    legend.position = "right",
+    panel.grid.minor = element_blank(),
+    panel.grid.major.y = element_blank(),
+    plot.title = element_text(face = "bold", size = 18),
+    plot.subtitle = element_text(size = 13, margin = margin(b = 10)),
+    plot.caption = element_text(size = 10, face = "italic")
+  )
+
+
 ######################################################################################
 
 ggsave(paste0(plotsFolder, "meta_hallm_byTF_barplot.pdf"), plot = meta_hallm_byTF_barplot, 
@@ -442,6 +481,10 @@ ggsave(paste0(plotsFolder, "meta_hallm_byTF_barplot.pdf"), plot = meta_hallm_byT
 ggsave(paste0(plotsFolder, "meta_hallm_byTF_barplot.png"), plot = meta_hallm_byTF_barplot, 
     width = 12, height = 10, units = "in", dpi = 300)
 
+ggsave(paste0(plotsFolder, "meta_hallm_byTF_lollipop.pdf"), plot = meta_hallm_byTF_lollipop, 
+  width = 12, height = 5, dpi = 300)
+ggsave(paste0(plotsFolder, "meta_hallm_byTF_lollipop.png"), plot = meta_hallm_byTF_lollipop, 
+  width = 12, height = 5, dpi = 300)
 
 
 # ----------------------------
@@ -512,6 +555,41 @@ meta_hallm_all_barplot <- ggplot(filt_hallm_meta_all, aes(x = full_label, y = me
   plot.caption = element_text(size = 10, face = "italic")
  )
 
+# LOLLIPOP para meta hallmarks (ALL)
+meta_hallm_all_lollipop <- ggplot(
+  filt_hallm_meta_all,
+  aes(x = full_label, y = mean_enrichment)
+) +
+  # tallo
+  geom_segment(aes(xend = full_label, y = 0, yend = mean_enrichment),
+               linewidth = 0.9, color = "grey60") +
+  geom_point(aes(color = meta_padj),
+             size = 3.4, stroke = 0.2) +
+  coord_flip() +
+  scale_color_gradient(
+    low = "#2c7fb8", high = "#253494",
+    name = "Meta-adjusted\np-value",
+    trans = "reverse"
+  ) +
+  labs(
+    title = "Hallmark pathway enrichment across TMR regulons",
+    subtitle = "Pathways with meta-adjusted p-value < 0.05",
+    x = NULL,
+    y = "Average fold enrichment",
+    caption = "Data from GEO and TCGA"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    axis.text.y = element_markdown(size = 8),
+    axis.text.x = element_text(size = 10),
+    legend.position = "right",
+    panel.grid.minor = element_blank(),
+    panel.grid.major.y = element_blank(),
+    plot.title = element_text(face = "bold", size = 18),
+    plot.subtitle = element_text(size = 13, margin = margin(b = 10)),
+    plot.caption = element_text(size = 10, face = "italic")
+  )
+
 ######################################################################################
 
 ggsave(paste0(plotsFolder, "meta_hallm_all_barplot.pdf"), plot = meta_hallm_all_barplot, 
@@ -519,6 +597,10 @@ ggsave(paste0(plotsFolder, "meta_hallm_all_barplot.pdf"), plot = meta_hallm_all_
 ggsave(paste0(plotsFolder, "meta_hallm_all_barplot.png"), plot = meta_hallm_all_barplot, 
     width = 12, height = 10, units = "in", dpi = 300)
 
+ggsave(paste0(plotsFolder, "meta_hallm_all_lollipop.pdf"),
+       plot = meta_hallm_all_lollipop, width = 12, height = 4, units = "in", dpi = 300)
+ggsave(paste0(plotsFolder, "meta_hallm_all_lollipop.png"),
+       plot = meta_hallm_all_lollipop, width = 12, height = 4, units = "in", dpi = 300)
 
 # ----------------------------
 ### heatmap plot
@@ -646,6 +728,8 @@ co_ocurrence <- cowplot::plot_grid(
 co_ocurrence
 
 ggsave(paste0(plotsFolder,"meta_tmrs-hallamrks_co-ocurrence-plot.pdf"), plot = co_ocurrence, 
+    width = 15, height = 9, units = "in", dpi = 300)
+ggsave(paste0(plotsFolder,"meta_tmrs-hallamrks_co-ocurrence-plot.png"), plot = co_ocurrence, 
     width = 15, height = 9, units = "in", dpi = 300)
 
 #############################################
@@ -780,11 +864,52 @@ meta_go_bar_plot_byTF <- ggplot(filt_go_meta_byTF, aes(x = full_label, y = mean_
   plot.subtitle = element_text(size = 13, margin = margin(b = 10)),
   plot.caption = element_text(size = 10, face = "italic")
  )
+
+# LOLLIPOP para GO enrichment across TMR regulons
+meta_go_lollipop_byTF <- ggplot(
+  filt_go_meta_byTF,
+  aes(x = full_label, y = mean_enrichment)
+) +
+  geom_segment(aes(xend = full_label, y = 0, yend = mean_enrichment),
+               linewidth = 0.9, color = "grey60") +
+  geom_point(aes(color = meta_padj),
+             size = 3.4, stroke = 0.2) +
+  coord_flip() +
+  scale_color_gradient(
+    low = "#2c7fb8", high = "#253494",
+    name = "Meta-adjusted\np-value",
+    trans = "reverse"
+  ) +
+  labs(
+    title = "GO ontologies enrichment across TMR regulons",
+    subtitle = "Top pathways with meta-adjusted p-value < 0.05",
+    x = NULL,
+    y = "Average fold enrichment",
+    caption = "Data from GEO and TCGA"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    axis.text.y = element_markdown(size = 8),
+    axis.text.x = element_text(size = 10),
+    legend.position = "right",
+    panel.grid.minor = element_blank(),
+    panel.grid.major.y = element_blank(),
+    plot.title = element_text(face = "bold", size = 18),
+    plot.subtitle = element_text(size = 13, margin = margin(b = 10)),
+    plot.caption = element_text(size = 10, face = "italic")
+  )
+
+
 ######################################################################################
 ggsave(paste0(plotsFolder, "meta_go_bar_plot_byTF.pdf"), plot = meta_go_bar_plot_byTF, 
     width = 12, height = 10, units = "in", dpi = 300)
 ggsave(paste0(plotsFolder, "meta_go_bar_plot_byTF.png"), plot = meta_go_bar_plot_byTF, 
     width = 12, height = 10, units = "in", dpi = 300)
+
+ggsave(paste0(plotsFolder, "meta_go_lollipop_byTF.pdf"),
+       plot = meta_go_lollipop_byTF, width = 12, height = 4, units = "in", dpi = 300)
+ggsave(paste0(plotsFolder, "meta_go_lollipop_byTF.png"),
+       plot = meta_go_lollipop_byTF, width = 12, height = 4, units = "in", dpi = 300)
 
 
 #############################################
@@ -867,12 +992,42 @@ meta_kegg_bar_plot_byTF <- ggplot(filt_kegg_meta_byTF, aes(x = full_label, y = m
   plot.caption = element_text(size = 10, face = "italic")
  )
 
+meta_kegg_lollipop_byTF <- ggplot(
+  filt_kegg_meta_byTF,
+  aes(x = full_label, y = mean_enrichment)
+) +
+  geom_segment(aes(xend = full_label, y = 0, yend = mean_enrichment),
+               linewidth = 0.9, color = "grey60") +
+  geom_point(aes(color = -log10(meta_padj), size = abs(mean_nes)),
+             alpha = 0.95) +
+  coord_flip() +
+  scale_color_gradient(
+    low = "#a6bddb", high = "#045a8d",
+    name = expression(-log[10]("meta padj"))
+  ) +
+  scale_size_continuous(name = "|mean NES|") +
+  labs(
+    title = "KEGG pathways enrichment across TMR regulons",
+    subtitle = "p.adj meta < 0.05 | color = -log10(p.adj), tamaño = |NES|",
+    x = NULL,
+    y = "Average fold enrichment"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    axis.text.y = element_markdown(size = 12),
+    panel.grid.major.y = element_blank()
+  )
+
+
 ######################################################################################
 
 ggsave(paste0(plotsFolder, "meta_kegg_bar_plot_byTF.pdf"), plot = meta_kegg_bar_plot_byTF, 
     width = 12, height = 10, units = "in", dpi = 300)
 ggsave(paste0(plotsFolder, "meta_kegg_bar_plot_byTF.png"), plot = meta_kegg_bar_plot_byTF, 
     width = 12, height = 10, units = "in", dpi = 300)
+
+ggsave(paste0(plotsFolder, "meta_kegg_lollipop_byTF2.png"),
+       plot = meta_kegg_lollipop_byTF2, width = 12, height = 10, units = "in", dpi = 300)
 
 
 #############################################
@@ -961,6 +1116,32 @@ meta_kegg_bar_plot_all_targets <- ggplot(filt_kegg_meta_all_targets, aes(x = ful
   plot.caption = element_text(size = 10, face = "italic")
  )
 
+meta_kegg_lollipop_all_targets <- ggplot(
+  filt_kegg_meta_all_targets,
+  aes(x = full_label, y = mean_enrichment)
+) +
+  geom_segment(aes(xend = full_label, y = 0, yend = mean_enrichment),
+               linewidth = 0.9, color = "grey60") +
+  geom_point(aes(color = -log10(meta_padj), size = abs(mean_nes)),
+             alpha = 0.95) +
+  coord_flip() +
+  scale_color_gradient(
+    low = "#a6bddb", high = "#045a8d",
+    name = expression(-log[10]("meta padj"))
+  ) +
+  scale_size_continuous(name = "|mean NES|") +
+  labs(
+    title = "KEGG pathways enrichment across TMR regulons",
+    subtitle = "p.adj meta < 0.05 | color = -log10(p.adj), tamaño = |NES|",
+    x = NULL,
+    y = "Average fold enrichment"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    axis.text.y = element_markdown(size = 12),
+    panel.grid.major.y = element_blank()
+  )
+
 ######################################################################################
 
 ggsave(paste0(plotsFolder, "meta_kegg_bar_plot_all_targets.pdf"), plot = meta_kegg_bar_plot_all_targets, 
@@ -968,6 +1149,349 @@ ggsave(paste0(plotsFolder, "meta_kegg_bar_plot_all_targets.pdf"), plot = meta_ke
 ggsave(paste0(plotsFolder, "meta_kegg_bar_plot_all_targets.png"), plot = meta_kegg_bar_plot_all_targets, 
     width = 12, height = 10, units = "in", dpi = 300)
 
+ggsave(paste0(plotsFolder, "meta_kegg_lollipop_all_targets2.png"),
+       plot = meta_kegg_lollipop_all_targets2, width = 12, height = 10, units = "in", dpi = 300)
 
+
+# ==== FIGURE 4 ====
+
+
+p4a_kegg_all <- ggplot(
+  filt_kegg_meta_all_targets,
+  aes(x = full_label, y = mean_enrichment)
+) +
+  geom_segment(aes(xend = full_label, y = 0, yend = mean_enrichment),
+               linewidth = 0.9, color = "grey60") +
+  geom_point(aes(color = -log10(meta_padj)),
+             size = 3.4, stroke = 0.2, alpha = 0.95) +
+  coord_flip() +
+  scale_color_gradient(
+    low = "#a6bddb", high = "#045a8d",
+    name = expression(-log[10]("meta padj"))
+  ) +
+  labs(
+    title = "(a) KEGG pathways",
+    subtitle = "p.adj meta < 0.05 (Fisher + FDR) | color = -log10(p.adj)",
+    x = NULL, y = "Average fold enrichment",
+    caption = "Data from GEO and TCGA"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    axis.text.y = element_markdown(size = 8),
+    panel.grid.major.y = element_blank()
+  )
+
+p4b_hallm_all <- ggplot(
+  filt_hallm_meta_all,
+  aes(x = full_label, y = mean_enrichment)
+) +
+  geom_segment(aes(xend = full_label, y = 0, yend = mean_enrichment),
+               linewidth = 0.9, color = "grey60") +
+  geom_point(aes(color = -log10(meta_padj)),
+             size = 3.4, stroke = 0.2, alpha = 0.95) +
+  coord_flip() +
+  scale_color_gradient(
+    low = "#a6bddb", high = "#045a8d",
+    name = expression(-log[10]("meta padj"))
+  ) +
+  labs(
+    title = "(b) MSigDB Hallmarks",
+    subtitle = "p.adj meta < 0.05 (Fisher + FDR) | color = -log10(p.adj)",
+    x = NULL, y = "Average fold enrichment",
+    caption = "No significant GO enrichments were detected"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    axis.text.y = element_markdown(size = 8),
+    panel.grid.major.y = element_blank()
+  )
+
+figure4 <- (p4a_kegg_all / p4b_hallm_all) +
+  plot_annotation(theme = theme(
+      plot.title = element_text(face = "bold", size = 18, margin = margin(b = 8))
+    )
+  )
+
+ggsave(paste0(plotsFolder, "Figure4_meta_enrichment_combined_targets.pdf"),
+       plot = figure4, width = 15, height = 5, units = "in", dpi = 300)
+ggsave(paste0(plotsFolder, "Figure4_meta_enrichment_combined_targets.png"),
+       plot = figure4, width = 15, height = 5, units = "in", dpi = 300)
+ 
+# ==== FIGURE 5 ====
+
+
+p5a_hallm_byTF <- ggplot(
+  filt_hallm_meta_byTF,
+  aes(x = full_label, y = mean_enrichment)
+) +
+  geom_segment(aes(xend = full_label, y = 0, yend = mean_enrichment),
+               linewidth = 0.9, color = "grey60") +
+  geom_point(aes(color = -log10(meta_padj), size = abs(mean_nes)),
+             alpha = 0.95) +
+  coord_flip() +
+  scale_color_gradient(low = "#a6bddb", high = "#045a8d",
+                       name = expression(-log[10]("meta padj"))) +
+  scale_size_continuous(name = "|mean NES|") +
+  labs(title = "(A) Hallmark gene sets",
+       subtitle = "Consistent links to estrogen response, inflammatory pathways, and EMT",
+       x = NULL, y = "Average fold enrichment") +
+  theme_minimal(base_size = 14) +
+  theme(
+    axis.text.y = element_markdown(size = 10),
+    panel.grid.major.y = element_blank()
+  )
+
+p5b_kegg_byTF <- ggplot(
+  filt_kegg_meta_byTF,
+  aes(x = full_label, y = mean_enrichment)
+) +
+  geom_segment(aes(xend = full_label, y = 0, yend = mean_enrichment),
+               linewidth = 0.9, color = "grey60") +
+  geom_point(aes(color = -log10(meta_padj), size = abs(mean_nes)),
+             alpha = 0.95) +
+  coord_flip() +
+  scale_color_gradient(low = "#a6bddb", high = "#045a8d",
+                       name = expression(-log[10]("meta padj"))) +
+  scale_size_continuous(name = "|mean NES|") +
+  labs(title = "(B) KEGG pathways",
+       subtitle = "TGF-β, TNF, adipocytokine, antigen presentation, cytokine interactions, thyroid hormone synthesis",
+       x = NULL, y = "Average fold enrichment") +
+  theme_minimal(base_size = 14) +
+  theme(
+    axis.text.y = element_markdown(size = 10),
+    panel.grid.major.y = element_blank()
+  )
+
+p5c_go_byTF <- ggplot(
+  filt_go_meta_byTF,
+  aes(x = full_label, y = mean_enrichment)
+) +
+  geom_segment(aes(xend = full_label, y = 0, yend = mean_enrichment),
+               linewidth = 0.9, color = "grey60") +
+  geom_point(aes(color = -log10(meta_padj), size = abs(mean_nes)),
+             alpha = 0.95) +
+  coord_flip() +
+  scale_color_gradient(low = "#a6bddb", high = "#045a8d",
+                       name = expression(-log[10]("meta padj"))) +
+  scale_size_continuous(name = "|mean NES|") +
+  labs(title = "(C) Gene Ontology (GO)",
+       subtitle = "Mainly associated with RUNX2 regulons (actin filaments, ECM components)",
+       x = NULL, y = "Average fold enrichment") +
+  theme_minimal(base_size = 14) +
+  theme(
+    axis.text.y = element_markdown(size = 10),
+    panel.grid.major.y = element_blank()
+  )
+
+figure5 <- (p5a_hallm_byTF / p5b_kegg_byTF / p5c_go_byTF) +
+  plot_layout(heights = c(3, 2, 0.6)) +  # A > B > C
+  plot_annotation(theme = theme())
+
+ggsave(paste0(plotsFolder, "Figure5_meta_enrichment_TMR_regulons.pdf"),
+       plot = figure5, width = 15, height = 16, units = "in", dpi = 300)
+ggsave(paste0(plotsFolder, "Figure5_meta_enrichment_TMR_regulons.png"),
+       plot = figure5, width = 15, height = 16, units = "in", dpi = 300)
+
+# ==== FIGURA 6 (versión mejorada)  ============================================
+# ----------------------------
+### heatmap plot
+# ----------------------------
+
+# — 1. Prepare data —
+tf_hallmark_long <- filt_hallm_meta_byTF %>% 
+ distinct(set, label) %>% 
+ mutate(present = 1) %>% 
+ pivot_wider(names_from = label, values_from = present, values_fill = 0) %>% 
+ pivot_longer(-set, names_to = "hallmark", values_to = "present") %>% 
+ filter(present == 1)
+
+hallmark_counts <- tf_hallmark_long %>% 
+ count(hallmark) %>% 
+ arrange(desc(n))
+
+tf_counts <- tf_hallmark_long %>% 
+ count(set) %>% 
+ arrange(n)
+
+hallmark_levels <- hallmark_counts$hallmark
+tf_levels    <- tf_counts$set
+
+tf_hallmark_long <- tf_hallmark_long %>% 
+ mutate(
+  hallmark = factor(hallmark, levels = hallmark_levels),
+  set    = factor(set,    levels = tf_levels)
+ )
+hallmark_counts <- hallmark_counts %>% 
+ mutate(hallmark = factor(hallmark, levels = hallmark_levels))
+tf_counts    <- tf_counts    %>% 
+ mutate(set    = factor(set, levels = tf_levels))
+
+# Consolida por (set, hallmark): color = -log10(padj) más extremo; size = promedio |NES|
+df_bubbles <- filt_hallm_meta_byTF %>%
+  dplyr::transmute(
+    set,
+    hallmark = label,
+    logp  = -log10(meta_padj),
+    nes   = mean_nes
+  ) %>%
+  dplyr::group_by(set, hallmark) %>%
+  dplyr::summarise(
+    logp = max(logp, na.rm = TRUE),
+    size = mean(abs(nes), na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  dplyr::mutate(
+    hallmark = factor(hallmark, levels = hallmark_levels),
+    set      = factor(set,      levels = tf_levels)
+  )
+
+# — 2. Three panels —
+
+# 2a) Dot matrix (heatmap‐like)
+
+# =========================
+# 1) Panel central (burbujas)
+# =========================
+# df_bubbles ya debe existir y tener: set, hallmark, logp (-log10 padj), size (=|NES| promedio)
+# Asegura el mismo orden que tus barras:
+df_bubbles <- df_bubbles %>%
+  mutate(
+    hallmark = factor(hallmark, levels = hallmark_levels),
+    set      = factor(set,      levels = tf_levels)
+  )
+
+main_plot <- ggplot(df_bubbles, aes(x = hallmark, y = set)) +
+  geom_point(
+    aes(fill = logp, size = size),
+    shape = 21, color = "grey20", stroke = 0.25, alpha = 0.95
+  ) +
+  scale_fill_gradient(
+    low  = "#a6bddb",
+    high = "#045a8d",
+    name = expression(-log[10]("meta padj"))
+  ) +
+  scale_size_continuous(
+    name  = "Mean NES",
+    range = c(2, 6)
+  ) +
+  scale_x_discrete(expand = expansion(add = c(0.5, 0.5))) +
+  scale_y_discrete(expand = expansion(add = c(0.5, 0.5))) +
+  theme_minimal(base_size = 12) +
+  theme(
+    axis.title   = element_blank(),
+    axis.text.x  = element_text(angle = 45, hjust = 1, vjust = 1),
+    panel.grid   = element_blank()
+  )
+
+# =========================
+# 2) Barras superior e izquierda (tu mismo código)
+# =========================
+top_bar <- ggplot(hallmark_counts, aes(x = hallmark, y = n)) +
+  geom_col(fill = "grey40", width = 0.4) +
+  geom_text(
+    data  = subset(hallmark_counts, n >= 4),
+    aes(label = n),
+    vjust  = 2, color = "white", size = 3
+  ) +
+  geom_text(
+    data  = subset(hallmark_counts, n <= 3),
+    aes(label = n),
+    vjust  = -0.3, color = "black", size = 3
+  ) +
+  scale_x_discrete(limits = hallmark_levels, expand = c(0, 0)) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.05))) +
+  theme_minimal() +
+  theme(
+    axis.title = element_blank(),
+    axis.text  = element_blank(),
+    axis.ticks = element_blank(),
+    panel.grid = element_blank()
+  )
+
+right_bar <- ggplot(tf_counts, aes(x = n, y = set)) +
+  geom_col(fill = "grey40", width = 0.6) +
+  geom_text(
+    data = dplyr::filter(tf_counts, n >= 2),
+    aes(label = n),
+    hjust = 2, color = "white", size = 3
+  ) +
+  geom_text(
+    data = dplyr::filter(tf_counts, n == 1),
+    aes(label = n),
+    hjust = -0.2, color = "black", size = 3
+  ) +
+  scale_x_continuous(expand = expansion(mult = c(0, 0.05))) +
+  scale_y_discrete(limits = tf_levels, expand = c(0, 0)) +
+  theme_minimal() +
+  theme(
+    axis.title  = element_blank(),
+    axis.text   = element_blank(),
+    axis.ticks  = element_blank(),
+    panel.grid  = element_blank(),
+    plot.margin = margin(r = 6)
+  )
+
+# =========================
+# 3) Extraer leyenda y ensamblar con cowplot
+# =========================
+
+# Leyenda horizontal (colecta fill + size)
+legend_grob <- cowplot::get_legend(
+  main_plot +
+    theme(
+      legend.position   = "bottom",
+      legend.direction  = "horizontal",
+      legend.box        = "horizontal",
+      legend.title      = element_text(size = 10),
+      legend.text       = element_text(size = 9)
+    ) +
+    guides(
+      fill = guide_colorbar(order = 1, barwidth = unit(120, "pt"), barheight = unit(6, "pt")),
+      size = guide_legend(order = 2, override.aes = list(alpha = 1), direction = "horizontal")
+    )
+)
+
+# Panel central sin leyenda
+main_plot_noleg <- main_plot + theme(legend.position = "none")
+
+# Fila superior (barras arriba)
+upper <- cowplot::plot_grid(
+  NULL, top_bar, NULL,
+  ncol = 3,
+  rel_widths = c(0.3, 3.9, 1.15),
+  align = "h"
+)
+
+# Fila intermedia (matriz + barras derecha)
+middle <- cowplot::plot_grid(
+  main_plot_noleg, right_bar,
+  ncol = 2,
+  rel_widths = c(4, 1),
+  align = "h"
+)
+
+# Fila inferior (leyenda)
+bottom <- cowplot::plot_grid(
+  legend_grob, ncol = 1
+)
+
+# Ensamble final: arriba / medio / leyenda
+co_ocurrence <- cowplot::plot_grid(
+  upper, middle, bottom,
+  ncol = 1,
+  rel_heights = c(0.5, 4, 0.45),  # ajusta la altura de la leyenda aquí
+  align = "v"
+)
+
+# (opcional) guardar
+# ggsave(paste0(plotsFolder, "Figure6_hallmarks_byTF_cooccurrence_with_legend_bottom.png"),
+#        co_ocurrence, width = 16, height = 9, units = "in", dpi = 300)
+
+co_ocurrence
+
+ggsave(paste0(plotsFolder,"meta_tmrs-hallamrks_co-ocurrence-plot.pdf"), plot = co_ocurrence, 
+    width = 15, height = 9, units = "in", dpi = 300)
+ggsave(paste0(plotsFolder,"meta_tmrs-hallamrks_co-ocurrence-plot.png"), plot = co_ocurrence, 
+    width = 15, height = 9, units = "in", dpi = 300)
 
 # save.image("meta_analysis_session.RData")
