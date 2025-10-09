@@ -3,11 +3,11 @@
 # Transcriptomic analysis of GEO GSE33630 for paper:
 # "Two Cohorts, One Network: Consensus Master Regulators 
 # Orchestrating Papillary Thyroid Carcinoma"
-# Hugo Tovar, National Inmstitute of Genomic Medicine, Mexico 
+# Hugo Tovar, National Institute of Genomic Medicine, Mexico 
 # hatovar@inmegen.gob.mx
 
 #############################################
-# 1. Load required libraries and setup folders (GEO analysis)
+# 1. Load required libraries and set up folders (GEO analysis)
 #############################################
 
 suppressPackageStartupMessages({
@@ -85,14 +85,14 @@ metadata <- pData(phenoData(gse[[1]]))
 # Ensure sample names in metadata match those in eset
 sampleNames(eset) <- substr(sampleNames(eset), 1, 9)
 
-# Match and filter metadata to match expression matrix
+# Match and filter metadata to match the expression matrix
 metadata <- metadata[match(sampleNames(eset), metadata$geo_accession), ]
 
 # Assign group label based on 'pathological' column
 metadata$Group <- ifelse(metadata$pathological == "papillary thyroid carcinoma (PTC)", "PTC",
                          ifelse(metadata$pathological == "patient-matched non-tumor control", "Normal", NA))
 
-# Keep only samples with defined group
+# Keep only samples with a defined group
 eset <- eset[, !is.na(metadata$Group)]
 metadata <- metadata[!is.na(metadata$Group), ]
 
@@ -242,7 +242,7 @@ write.table(ptc_df,
 
 
 #############################################
-# 6. Master Regulator Analysis (VIPER)
+# 6. Master Regulator Analysis (implemented in VIPER)
 #############################################
 
 stopifnot(file.exists("geo_tumor_network.txt"))
