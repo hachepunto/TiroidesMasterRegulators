@@ -1,6 +1,9 @@
-# scripts/helpers.R
-# Utility functions for thyroid project analyses
-# Hugo Tovar · July 2025
+# helpers.R
+# Utility functions for paper:
+# "Two Cohorts, One Network: Consensus Master Regulators 
+# Orchestrating Papillary Thyroid Carcinoma"
+# Hugo Tovar, National Institute of Genomic Medicine, Mexico 
+# hatovar@inmegen.gob.mx
 
 # Helper: Get the mode (most frequent value)
 getmode <- function(v) {
@@ -516,7 +519,7 @@ read_cisbp_pfm_debug <- function(motif_id, pwms_dir, scale = 100, verbose = TRUE
 
 
 
-# Extrae el data.frame @result de un gseaResult o de una lista con $gsea_result
+# Extract the data.frame @result from a gseaResult or a list with $gsea_result
 get_gsea_df <- function(x) {
   if (inherits(x, "gseaResult")) {
     as_tibble(x@result)
@@ -527,7 +530,7 @@ get_gsea_df <- function(x) {
   }
 }
 
-# Selecciona/renombra columnas esenciales y agrega sufijo del dataset
+# Select/rename essential columns and add dataset suffix
 select_gsea_cols <- function(df, is_go = FALSE, suffix = c("geo","tcga")) {
   suf <- match.arg(suffix)
   base_cols <- c("ID","Description","NES","pvalue","p.adjust")
@@ -542,7 +545,7 @@ select_gsea_cols <- function(df, is_go = FALSE, suffix = c("geo","tcga")) {
   }
 }
 
-# Full join + Fisher + métricas comunes
+# Full join + Fisher + common metrics
 combine_two_gsea <- function(df_geo, df_tcga, keys) {
   full_join(df_geo, df_tcga, by = keys) %>%
     # Fisher con p-values crudos
