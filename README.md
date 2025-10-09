@@ -10,7 +10,7 @@ cd TiroidesMasterRegulators
 git submodule update --init --recursive
 
 
-## Overview
+### Overview
 
 This repository contains all scripts, helper functions, and reproducible pipelines used in the manuscript:
 
@@ -18,5 +18,8 @@ This repository contains all scripts, helper functions, and reproducible pipelin
 
 The analysis integrates transcriptomic data from two independent cohorts — TCGA-THCA (RNA-seq) and GEO GSE33630 (microarray) — to identify Transcriptional Master Regulators (TMRs) using a unified VIPER-based network approach.The pipeline covers normalization, differential expression, regulon inference with ARACNe-AP, and meta-analysis of master regulators and hallmark enrichments.
 
+
+
 *“Networks reveal what lists conceal.”*
+
 — Systems Biology proverb
