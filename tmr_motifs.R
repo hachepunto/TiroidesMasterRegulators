@@ -1,8 +1,10 @@
 
 # tmr_motifs.R
-# Transcriptomic analysis of TCGA-THCA for the subtype "Papillary adenocarcinoma, NOS"
-# Hugo Tovar, National Inmstitute of Genomic Medicine, Mexico hatovar@inmegen.gob.mx
-
+# Motif-Integrated Network of TMRs for paper:
+# "Two Cohorts, One Network: Consensus Master Regulators 
+# Orchestrating Papillary Thyroid Carcinoma"
+# Hugo Tovar, National Institute of Genomic Medicine, Mexico 
+# hatovar@inmegen.gob.mx
 
 #############################################
 # 1) Load required libraries and set up folders
@@ -47,7 +49,7 @@ dir.create(plotsFolder,   showWarnings = FALSE, recursive = TRUE)
 # Load helper functions
 source("helpers.R")
 
-# utylities
+# utilities
 `%||%` <- function(a, b) if (is.null(a)) b else a
 
 #############################################
@@ -199,7 +201,7 @@ data.frame(
 ) |> dplyr::count(ok)
 
 
-# 1) Loading of manual recovered
+# 1) Loading of the manualy recovered
 recovered <- vroom::vroom("extra_data/tfs_found_jaspar.txt", show_col_types = FALSE)
 
 manual_pfms <- recovered %>%
@@ -492,7 +494,7 @@ print(tf_summary, n = 50)
 readr::write_tsv(tf_summary, paste0(outputsFolder, "interactions_summary_only_motifs.tsv"))
 
 #############################################
-# 6) Only motif hits circos plot
+# 6) Only motif hits the circos plot
 #############################################
 
 # Build interaction matrix in the exact TF order used in the summary
@@ -707,7 +709,7 @@ base_pal <- colorRampPalette(brewer.pal(11, "Spectral"))(length(tf_order))
 set.seed(42)
 tf_colors <- setNames(sample(base_pal), tf_order)
 
-# Link color matrix inheriting from the emisor
+# Link color matrix inheriting from the emitter
 color_mat <- matrix(tf_colors[rownames(interaction_mat)],
                     nrow = nrow(interaction_mat), ncol = ncol(interaction_mat),
                     dimnames = dimnames(interaction_mat))
