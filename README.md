@@ -1,5 +1,8 @@
 # Two Cohorts, One Network: Consensus Master Regulators Orchestrating Papillary Thyroid Carcinoma
 
+**In preprint**
+Doi: 10.20944/preprints202510.0685.v1
+Website: https://www.preprints.org/manuscript/202510.0685/v1
 
 **Author:** Hugo Tovar
 **Institution:** National Institute of Genomic Medicine (INMEGEN), Mexico
