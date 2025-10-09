@@ -5,10 +5,11 @@
 **Institution:** National Institute of Genomic Medicine (INMEGEN), Mexico
 **Contact:** hatovar@inmegen.gob.mx
 
+```
 git clone hachepunto/TiroidesMasterRegulators.git
 cd TiroidesMasterRegulators
 git submodule update --init --recursive
-
+```
 
 ### Overview
 
