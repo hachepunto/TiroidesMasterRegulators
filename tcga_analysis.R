@@ -3,7 +3,7 @@
 # Transcriptomic analysis of TCGA-THCA for paper:
 # "Two Cohorts, One Network: Consensus Master Regulators 
 # Orchestrating Papillary Thyroid Carcinoma"
-# Hugo Tovar, National Inmstitute of Genomic Medicine, Mexico 
+# Hugo Tovar, National Institute of Genomic Medicine, Mexico 
 # hatovar@inmegen.gob.mx
 
 #############################################
@@ -81,7 +81,7 @@ keep_cols[2] <- TRUE  # keep gene_name column
 filtered_counts <- raw_counts_clean[, keep_cols]
 
 #############################################
-# 4. Collapse duplicated gene names using statistical mode
+# 4. Collapse duplicated gene names using the statistical mode
 #############################################
 collapsed <- filtered_counts %>% 
   group_by(gene_name) %>%
@@ -129,12 +129,11 @@ write_tsv(deg_results, paste0(outputsFolder, "DEGs_limma_TCGA.tsv"))
 
 
 #############################################
-# 7. Master Regulator Analysis (VIPER)
+# 7. Master Regulator Analysis (implemented in VIPER)
 #############################################
 
 # "tcga_tumor_network.txt" is the result file of the network generated 
 # with ARACNe-AP using the script "aracne-ap.sh"
-stopifnot(file.exists("tcga_tumor_network.txt"))
 
 regulon <- aracne2regulon("tcga_tumor_network.txt", cpm_matrix[, tumors])
 
