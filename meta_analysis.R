@@ -2,7 +2,7 @@
 # Meta-analysis of master regulator results from TCGA and GEO datasets for paper:
 # "Two Cohorts, One Network: Consensus Master Regulators 
 # Orchestrating Papillary Thyroid Carcinoma"
-# Hugo Tovar, National Inmstitute of Genomic Medicine, Mexico 
+# Hugo Tovar, National Institute of Genomic Medicine, Mexico 
 # hatovar@inmegen.gob.mx
 
 #############################################
@@ -478,7 +478,7 @@ filt_kegg_meta_all_targets <- kegg_meta_all_targets %>%
 write_tsv(filt_kegg_meta_all_targets, paste0(outputsFolder, "meta_kegg_all.tsv"))
 
 #############################################
-# 11. Meta analysis ORA visualization 
+# 11. Meta-analysis ORA visualization 
 #############################################
 
 ##########################################################################################
@@ -623,7 +623,7 @@ ggsave(paste0(plotsFolder, "Figure5_meta_enrichment_TMR_regulons.png"),
        plot = figure5, width = 15, height = 16, units = "in", dpi = 300)
 
 #############################################
-# 12. Meta analysis ORA visualization: heatmap plot
+# 12. Meta-analysis ORA visualization: heatmap plot
 #############################################
 
 # — 1. Prepare data —
@@ -678,7 +678,7 @@ df_bubbles <- filt_hallm_meta_byTF %>%
 ##########################################################################################
 
 # =========================
-# 1) Central panel (buble)
+# 1) Central panel (bubble)
 # =========================
 
 df_bubbles <- df_bubbles %>%
@@ -711,7 +711,7 @@ main_plot <- ggplot(df_bubbles, aes(x = hallmark, y = set)) +
   )
 
 # =========================
-# 2) Top lefth bar
+# 2) Top left bar
 # =========================
 
 top_bar <- ggplot(hallmark_counts, aes(x = hallmark, y = n)) +
