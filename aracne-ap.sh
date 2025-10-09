@@ -1,3 +1,10 @@
+# aracne-ap.sh
+# Gene Regulatory Networks deconvolution using ARACNe-AP (Califano lab) for paper:
+# "Two Cohorts, One Network: Consensus Master Regulators 
+# Orchestrating Papillary Thyroid Carcinoma"
+# Hugo Tovar, National Institute of Genomic Medicine, Mexico 
+# hatovar@inmegen.gob.mx
+
 # TCGA
 java -Xmx50G -jar ARACNe-AP/dist/aracne.jar -e inmat_TCGA.txt -o tcga_network --tfs extra_data/TF_lambert.txt --pvalue 1E-8 --seed 1 --calculateThreshold
 
