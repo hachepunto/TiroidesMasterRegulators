@@ -1,7 +1,10 @@
 
 # geo_analysis.R
-# Transcriptomic analysis of GEO GSE33630 for the subtype "Papillary adenocarcinoma, NOS"
-# Hugo Tovar, National Inmstitute of Genomic Medicine, Mexico hatovar@inmegen.gob.mx
+# Transcriptomic analysis of GEO GSE33630 for paper:
+# "Two Cohorts, One Network: Consensus Master Regulators 
+# Orchestrating Papillary Thyroid Carcinoma"
+# Hugo Tovar, National Inmstitute of Genomic Medicine, Mexico 
+# hatovar@inmegen.gob.mx
 
 #############################################
 # 1. Load required libraries and setup folders (GEO analysis)
@@ -21,14 +24,13 @@ suppressPackageStartupMessages({
   library(readr)
   library(limma)
   library(edgeR)
-  library(EnhancedVolcano)
   library(RColorBrewer)
   library(gplots)
   library(GEOquery)
 })
 
 # Load helper functions
-source("scripts/helpers.R")
+source("helpers.R")
 
 # Create output directories
 outputsFolder <- paste0(getwd(), "/results/")
@@ -102,8 +104,9 @@ pData(eset) <- metadata
 #############################################
 
 # Define the design matrix for comparing groups
-design <- model.matrix(~ 0 + metadata$Group)
-colnames(design) <- c("Normal", "PTC")
+grp <- factor(metadata$Group, levels = c("Normal","PTC"))
+design <- model.matrix(~ 0 + grp)
+colnames(design) <- c("Normal","PTC")
 
 # Create contrast matrix to compare PTC vs Normal
 contrast.matrix <- makeContrasts(PTC - Normal, levels = design)
@@ -152,62 +155,6 @@ results_collapsed <- results[Bmax, ]
 write_tsv(results_collapsed,
           file = paste0(outputsFolder,"DEGs_limma_GEO.tsv"))
 
-
-# ----------------------------
-# Volcano plot
-# ----------------------------
-pdf(paste0(plotsFolder, "volcano_GEO.pdf"), width = 8, height = 8)
-EnhancedVolcano(results_collapsed,
-                lab = results_collapsed$gene_name,
-                x = 'logFC',
-                y = 'adj.P.Val',
-                title = 'GSE33630: PTC vs Normal',
-                pCutoff = 0.05,
-                FCcutoff = 1,
-                pointSize = 2.5,
-                labSize = 3)
-dev.off()
-
-
-# ----------------------------
-# Heatmap of top 100 DEGs
-# ----------------------------
-
-# Extract top 100 DEGs by adjusted p-value
-top_degs <- results_collapsed %>%
-  arrange(adj.P.Val) %>%
-  slice(1:100) %>%
-  pull(gene_name)
-
-# Create matrix of expression data (log2-transformed)
-expr_matrix <- exprs(eset)
-expr_matrix <- expr_matrix[match(rownames(results_collapsed), rownames(expr_matrix)), ]
-rownames(expr_matrix) <- results_collapsed$gene_name
-log_expr <- log2(expr_matrix[top_degs, ] + 1)
-
-# Assign colors to sample groups
-group_colors <- ifelse(metadata$Group == "PTC", "#F8766D", "#00BFC4")
-
-# Generate heatmap with z-score per row
-pdf(paste0(plotsFolder, "heatmap_GEO.pdf"), width = 8, height = 8)
-heatmap.2(
-  as.matrix(log_expr),
-  scale = "row",                  # z-score per gene
-  trace = "none",
-  col = colorRampPalette(rev(brewer.pal(11, "RdYlBu")))(100),
-  ColSideColors = group_colors,
-  dendrogram = "both",
-  key = TRUE,
-  key.title = "Z-score",
-  key.xlab = "Expression",
-  cexRow = 0.6,
-  cexCol = 0.5,
-  margins = c(5, 9),
-  main = "Top 100 DEGs - GSE33630"
-)
-legend("topright", legend = c("PTC", "Normal"),
-       fill = c("#F8766D", "#00BFC4"), cex = 0.8, border = NA, bty = "n")
-dev.off()
 
 #############################################
 # 5. Prepare expression matrix for ARACNe
@@ -293,105 +240,16 @@ write.table(ptc_df,
             quote = FALSE,
             row.names = FALSE)
 
-#############################################
-# 6. GSEA: GO (BP and MF) and KEGG using clusterProfiler
-#############################################
-
-# Run GSEA for GO terms (BP and MF)
-gsea_go_out <- run_gsea_go(df = results_collapsed)
-
-# Save GO results
-write_tsv(gsea_go_out$gsea_result@result,
-          paste0(outputsFolder, "geo_gsea_go_bp_mf.tsv"))
-
-# Ridgeplot for GO
-pdf(paste0(plotsFolder, "geo_gsea_go.pdf"), width = 12, height = 15)
-plot_ridge_panels(gsea_go_out$gsea_result, 20, title = "GEO GSEA GO Ridgeplot")
-dev.off()
-
-# Save GO RDS
-saveRDS(gsea_go_out, paste0(rdsFolder, "geo_gsea_go.rds"))
-
-# Run GSEA for KEGG
-kegg_gsea <- gseKEGG(geneList = gsea_go_out$gene_list,
-                     organism = "hsa",
-                     pvalueCutoff = 0.05,
-                     verbose = FALSE)
-
-# Save KEGG results
-write_tsv(kegg_gsea@result, paste0(outputsFolder, "geo_gsea_kegg.tsv"))
-
-# Ridgeplot for KEGG
-pdf(paste0(plotsFolder, "geo_gsea_kegg.pdf"), width = 12, height = 15)
-ridgeplot(kegg_gsea, showCategory = 20, fill = "p.adjust") +
-  ggtitle("GEO GSEA KEGG Ridgeplot")
-dev.off()
-
-# Save KEGG RDS
-saveRDS(kegg_gsea, paste0(rdsFolder, "geo_gsea_kegg.rds"))
-
-
-# Run GSEA: Hallmarks (MSigDB) using clusterProfiler
-# Load Hallmark data (GSEA Broad GMT)
-hallmark_gmt <- read.gmt("extra_data/h.all.v2025.1.Hs.symbols.gmt")
-hallmark_names <- read_tsv("extra_data/hallmarks_names.txt")
-
-rank_sym_geo <- gsea_go_out$gene_mapping %>%
-  inner_join(
-    AnnotationDbi::select(org.Hs.eg.db,
-                          keys   = unique(.$ENTREZID),
-                          keytype= "ENTREZID",
-                          columns= "SYMBOL") %>% as_tibble(),
-    by = "ENTREZID"
-  ) %>%
-  filter(!is.na(SYMBOL)) %>%
-  mutate(SYMBOL = toupper(SYMBOL)) %>%
-  group_by(SYMBOL) %>%
-  summarize(logFC = mean(logFC), .groups = "drop") %>%
-  arrange(desc(logFC))
-
-gene_list_sym_geo <- rank_sym_geo$logFC
-names(gene_list_sym_geo) <- rank_sym_geo$SYMBOL
-gene_list_sym_geo <- sort(gene_list_sym_geo, decreasing = TRUE)
-
-# 2) Asegurar TERM2GENE/TERM2NAME en formato limpio
-hallmark_t2g <- hallmark_gmt %>%
-  as_tibble() %>%
-  transmute(term = as.character(term), gene = toupper(gene)) %>%
-  distinct(term, gene)
-
-hallmark_t2n <- hallmark_names %>%
-  transmute(term = ID, name = label_ready)
-
-# 3) Correr GSEA con símbolos
-gsea_hallmark_geo <- clusterProfiler::GSEA(
-  geneList     = gene_list_sym_geo,   # <-- ahora SYMBOL
-  TERM2GENE    = hallmark_t2g,
-  TERM2NAME    = hallmark_t2n,
-  pvalueCutoff = 1,
-  verbose      = FALSE
-)
-
-readr::write_tsv(as.data.frame(gsea_hallmark_geo@result),
-                   file = paste0(outputsFolder, "geo_gsea_hallmarks.tsv"))
-
-pdf(paste0(plotsFolder, "geo_gsea_hallmarks.pdf"), width = 10, height = 8)
-print(enrichplot::ridgeplot(gsea_hallmark_geo, showCategory = 20, fill = "p.adjust") +
-ggplot2::ggtitle("GEO GSEA Hallmarks (Top 20)"))
-dev.off()
-
-ggsave(filename = paste0(plotsFolder, "geo_gsea_hallmarks.png"),
-         plot     = enrichplot::ridgeplot(gsea_hallmark_geo, showCategory = 20, fill = "p.adjust") +
-                    ggplot2::ggtitle("GEO GSEA Hallmarks (Top 20)"),
-         width = 10, height = 8, dpi = 300)
-
-saveRDS(gsea_hallmark_geo, paste0(rdsFolder, "geo_gsea_hallmarks.rds"))
 
 #############################################
-# 7. Master Regulator Analysis (VIPER)
+# 6. Master Regulator Analysis (VIPER)
 #############################################
 
-regulon <- aracne2regulon("geo_tumor_network.txt", collapsed[, tumors])
+stopifnot(file.exists("geo_tumor_network.txt"))
+# "geo_tumor_network.txt" is the result file of the network generated 
+# with ARACNe-AP using the script "aracne-ap.sh"
+
+regulon <- aracne2regulon("geo_tumor_network.txt", collapsed[, tumors]) 
 
 signature <- rowTtest(collapsed[, tumors], collapsed[, healty])
 signature <- (qnorm(signature$p.value / 2, lower.tail = FALSE) *
@@ -409,17 +267,5 @@ mrs_all <- viper_mrsTopTable(mrs, p_threshold = 1)
 saveRDS(mrs, paste0(rdsFolder, "geo_mrs.rds"))
 write_tsv(as_tibble(mrs_all), paste0(outputsFolder, "all_mrs_table_GEO.tsv"))
 saveRDS(mrs_all, paste0(rdsFolder, "geo_mrs_table.rds"))
-
-# Plots
-pdf(paste0(plotsFolder, "mrs_plot_GEO.pdf"), width = 7, height = 8)
-plot(mrs, 20, density = 100, color = c("#0571b0", "#ca0020"),
-     smooth = 0, cex = 0, bins = 800, sep = 1, hybrid = TRUE, gama = 3)
-dev.off()
-
-png(paste0(plotsFolder, "mrs_plot_GEO.png"), width = 960, height = 1200, res = 150)
-plot(mrs, 20, density = 100, color = c("#0571b0", "#ca0020"),
-     smooth = 0, cex = 0, bins = 800, sep = 1, hybrid = TRUE, gama = 3)
-dev.off()
-
 
 # save.image("geo_session.RData")

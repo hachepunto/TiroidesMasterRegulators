@@ -1,6 +1,9 @@
 # meta_analysis.R
-# Meta-analysis of master regulator results from TCGA and GEO
-# Hugo Tovar, National Institute of Genomic Medicine, Mexico
+# Meta-analysis of master regulator results from TCGA and GEO datasets for paper:
+# "Two Cohorts, One Network: Consensus Master Regulators 
+# Orchestrating Papillary Thyroid Carcinoma"
+# Hugo Tovar, National Inmstitute of Genomic Medicine, Mexico 
+# hatovar@inmegen.gob.mx
 
 #############################################
 # 1. Load required libraries and set up folders
@@ -27,176 +30,13 @@ suppressPackageStartupMessages({
 })
 
 # Load helper functions
-source("scripts/helpers.R")
+source("helpers.R")
 
 # Create output directories
 outputsFolder <- paste0(getwd(), "/meta_results/")
 plotsFolder <- paste0(getwd(), "/meta_results/plots/")
 dir.create(outputsFolder, showWarnings = FALSE)
 dir.create(plotsFolder, showWarnings = FALSE)
-
-#############################################
-# 2. Load GSEA results and perform meta-analysis
-#############################################
-
-tcga_gsea_go <- readRDS("rds/tcga_gsea_go.rds")
-tcga_gsea_kegg <- readRDS("rds/tcga_gsea_kegg.rds")
-tcga_gsea_hallmarks <- readRDS("rds/tcga_gsea_hallmarks.rds")
-geo_gsea_go <- readRDS("rds/geo_gsea_go.rds")
-geo_gsea_kegg <- readRDS("rds/geo_gsea_kegg.rds")
-geo_gsea_hallmarks  <- readRDS("rds/geo_gsea_hallmarks.rds")
-
-# ------------ GO ------------
-tcga_go_df <- get_gsea_df(tcga_gsea_go)  %>% select_gsea_cols(is_go = TRUE,  suffix = "tcga")
-geo_go_df  <- get_gsea_df(geo_gsea_go)   %>% select_gsea_cols(is_go = TRUE,  suffix = "geo")
-
-go_meta <- combine_two_gsea(
-  df_geo  = geo_go_df,
-  df_tcga = tcga_go_df,
-  keys    = c("ONTOLOGY","ID","Description")
-)
-
-filt_go_meta <- go_meta %>%
-  filter(!is.na(meta_pval),
-         meta_padj < 0.05,
-         concordant_sign) %>%
-  arrange(desc(abs(mean_NES)), Description) %>%
-  mutate(
-    full_label = paste(ONTOLOGY, Description, sep = ": "),
-    full_label = factor(full_label, levels = unique(full_label))
-  )
-
-write_tsv(filt_go_meta, file.path(outputsFolder, "meta_gsea_GO.tsv"))
-
-go_top <- filt_go_meta %>%
-  filter(is.finite(meta_padj), is.finite(mean_NES)) %>%
-  arrange(desc(abs(mean_NES))) %>%
-  slice_head(n = 30) %>%
-  mutate(term = full_label) %>%
-  mutate(term = factor(term, levels = rev(unique(term))))
-
-p_go <- ggplot(go_top, aes(x = mean_NES, y = term)) +
-  geom_segment(aes(x = 0, xend = mean_NES, y = term, yend = term),
-               linewidth = 1.0, color = "grey60") +
-  geom_point(aes(color = meta_padj), size = 3) +
-  geom_vline(xintercept = 0, linetype = "dashed", linewidth = 0.4, color = "grey50") +
-  scale_color_gradient(low = "#2c7fb8", high = "#253494", trans = "reverse",
-                       name = "Meta-adjusted p-value") +
-  labs(title = "Meta-GSEA GO (TCGA + GEO)", x = "Mean NES", y = NULL) +
-  theme_minimal(base_size = 13) +
-  theme(panel.grid.major.y = element_blank(),
-        panel.grid.minor   = element_blank(),
-        axis.text.y        = element_text(size = 8),
-        axis.text.x        = element_text(size = 8),
-        legend.position    = "right",
-        plot.title         = element_text(face = "bold", size = 15))
-
-ggsave(file.path(plotsFolder, "meta_gsea_GO_lollipop.pdf"), p_go, width = 16, height = 4, units = "in")
-ggsave(file.path(plotsFolder, "meta_gsea_GO_lollipop.png"), p_go, width = 16, height = 4, units = "in", dpi = 300)
-
-
-# ------------ KEGG ------------
-tcga_kegg_df <- get_gsea_df(tcga_gsea_kegg) %>% select_gsea_cols(is_go = FALSE, suffix = "tcga")
-geo_kegg_df  <- get_gsea_df(geo_gsea_kegg)  %>% select_gsea_cols(is_go = FALSE, suffix = "geo")
-
-kegg_meta <- combine_two_gsea(
-  df_geo  = geo_kegg_df,
-  df_tcga = tcga_kegg_df,
-  keys    = c("ID","Description")
-)
-
-filt_kegg_meta <- kegg_meta %>%
-  filter(!is.na(meta_pval),
-         meta_padj < 0.05,
-         concordant_sign) %>%
-  arrange(desc(abs(mean_NES)), Description) %>%
-  mutate(
-    full_label = factor(Description, levels = unique(Description))
-  )
-
-write_tsv(filt_kegg_meta, file.path(outputsFolder, "meta_gsea_KEGG.tsv"))
-
-kegg_top <- filt_kegg_meta %>%
-  filter(is.finite(meta_padj), is.finite(mean_NES)) %>%
-  arrange(desc(abs(mean_NES))) %>%
-  slice_head(n = 30) %>%
-  mutate(term = full_label) %>% 
-  mutate(term = factor(term, levels = rev(unique(term))))
-
-p_kegg <- ggplot(kegg_top, aes(x = mean_NES, y = term)) +
-  geom_segment(aes(x = 0, xend = mean_NES, y = term, yend = term),
-               linewidth = 1.0, color = "grey60") +
-  geom_point(aes(color = meta_padj), size = 3) +
-  geom_vline(xintercept = 0, linetype = "dashed", linewidth = 0.4, color = "grey50") +
-  scale_color_gradient(low = "#2c7fb8", high = "#253494", trans = "reverse",
-                       name = "Meta-adjusted p-value") +
-  labs(title = "Meta-GSEA KEGG (TCGA + GEO)", x = "Mean NES", y = NULL) +
-  theme_minimal(base_size = 13) +
-  theme(panel.grid.major.y = element_blank(),
-        panel.grid.minor   = element_blank(),
-        axis.text.y        = element_text(size = 8),
-        axis.text.x        = element_text(size = 8),
-        legend.position    = "right",
-        plot.title         = element_text(face = "bold", size = 15))
-
-ggsave(file.path(plotsFolder, "meta_gsea_KEGG_lollipop.pdf"), p_kegg, width = 16, height = 4, units = "in")
-ggsave(file.path(plotsFolder, "meta_gsea_KEGG_lollipop.png"), p_kegg, width = 16, height = 4, units = "in", dpi = 300)
-
-# ------------ HALLMARKS ------------
-# Load Hallmark data (GSEA Broad GMT)
-hallmark_gmt <- read.gmt("extra_data/h.all.v2025.1.Hs.symbols.gmt")
-hallmark_names <- read_tsv("extra_data/hallmarks_names.txt")
-
-tcga_hm_df <- get_gsea_df(tcga_gsea_hallmarks) %>%
-  select_gsea_cols(is_go = FALSE, suffix = "tcga")
-
-geo_hm_df  <- get_gsea_df(geo_gsea_hallmarks) %>%
-  select_gsea_cols(is_go = FALSE, suffix = "geo")
-
-hallmarks_meta <- combine_two_gsea(
-  df_geo  = geo_hm_df,
-  df_tcga = tcga_hm_df,
-  keys    = c("ID","Description")   # no ONTOLOGY en Hallmarks
-)
-
-# Nombres "bonitos" si los tienes en hallmark_names (ID -> label_ready)
-filt_hallmarks_meta <- hallmarks_meta %>%
-  dplyr::filter(!is.na(meta_pval),
-                meta_padj < 0.05,
-                concordant_sign) %>%
-  dplyr::left_join(hallmark_names, by = "ID") %>%
-  dplyr::mutate(label = dplyr::coalesce(label_ready, Description),
-                full_label = factor(label, levels = unique(label))) %>%
-  dplyr::arrange(desc(abs(mean_NES)), label)
-
-readr::write_tsv(filt_hallmarks_meta, file.path(outputsFolder, "meta_gsea_HALLMARKS.tsv"))
-
-
-hallm_top <- filt_hallmarks_meta %>%
-  filter(is.finite(meta_padj), is.finite(mean_NES)) %>%
-  arrange(desc(abs(mean_NES))) %>%
-  slice_head(n = 30) %>%
-  mutate(term = full_label) %>%  
-  mutate(term = factor(term, levels = rev(unique(term))))
-
-p_hallm <- ggplot(hallm_top, aes(x = mean_NES, y = term)) +
-  geom_segment(aes(x = 0, xend = mean_NES, y = term, yend = term),
-               linewidth = 1.0, color = "grey60") +
-  geom_point(aes(color = meta_padj), size = 3) +
-  geom_vline(xintercept = 0, linetype = "dashed", linewidth = 0.4, color = "grey50") +
-  scale_color_gradient(low = "#2c7fb8", high = "#253494", trans = "reverse",
-                       name = "Meta-adjusted p-value") +
-  labs(title = "Meta-GSEA Hallmarks (TCGA + GEO)", x = "Mean NES", y = NULL) +
-  theme_minimal(base_size = 13) +
-  theme(panel.grid.major.y = element_blank(),
-        panel.grid.minor   = element_blank(),
-        axis.text.y        = element_text(size = 8),
-        axis.text.x        = element_text(size = 8),
-        legend.position    = "right",
-        plot.title         = element_text(face = "bold", size = 15))
-
-ggsave(file.path(plotsFolder, "meta_gsea_HALLMARKS_lollipop.pdf"), p_hallm, width = 16, height = 4, units = "in")
-ggsave(file.path(plotsFolder, "meta_gsea_HALLMARKS_lollipop.png"), p_hallm, width = 16, height = 4, units = "in", dpi = 300)
 
 
 #############################################
@@ -232,7 +72,11 @@ sig_tmrs <- meta_results %>% filter(meta_padj < 0.05)
 # Save meta-analysis results
 write_tsv(meta_results, paste0(outputsFolder,"meta_mrs_results.tsv"))
 
-# Volcano plot
+##########################################################################################
+# ==== FIGURE 1 ====
+##########################################################################################
+
+# Volcano plot TMRs
 pdf(paste0(plotsFolder, "meta_volcano_TMRs.pdf"), width = 8, height = 12)
 EnhancedVolcano(meta_results,
   lab = meta_results$tf,
@@ -259,7 +103,7 @@ EnhancedVolcano(meta_results,
 dev.off()
 
 #############################################
-# 3. Shadow significative TMRs
+# 3. Meta-Regulon
 #############################################
 
 # load VIPER objects
@@ -274,37 +118,6 @@ regulon_geo <- geo_mrs$regulon
 tmrs_vector <- meta_results %>%
  filter(meta_padj < 0.05) %>%
  pull(tf)
-
-tmr_shadow_df <- purrr::map_dfr(tmrs_vector, function(tf) {
- tryCatch({
-  targets <- find_consensus_targets(tf, tmrs_vector, regulon_tcga, regulon_geo)
-  if (length(targets) > 0) {
-   tibble(regulator = tf, target_tmr = targets)
-  } else {
-   NULL
-  }
- }, error = function(e) NULL)
-})
-
-
-g <- graph_from_data_frame(tmr_shadow_df, directed = TRUE)
-
-pdf(file = paste0(plotsFolder, "autoregulated_TMR_network.pdf"), width = 8, height = 8)
-plot(
- g,
- vertex.size = 10,       # tamaño de los nodos
- vertex.label.cex = .5,    # tamaño de la etiqueta (más grande)
- vertex.label.color = "blue", # color del texto
- vertex.color = "grey",   # color del nodo
- edge.arrow.size = 0.4,    # tamaño de la flecha (más pequeño)
- edge.color = "gray40",    # color del borde
- layout = layout_with_fr    # puedes cambiar el layout si quieres
-)
-dev.off()
-
-#############################################
-# 4. Meta-Regulon
-#############################################
 
 # Built the combined regulon only for the validated TMRs.
 meta_regulon <- purrr::compact(purrr::map(setNames(tmrs_vector, tmrs_vector), 
@@ -321,7 +134,7 @@ meta_reg_stats <- met_reg_tbl %>%
 write_tsv(meta_reg_stats, paste0(outputsFolder, "shared_tarjets_by_tmr.tsv"))
 
 #############################################
-# 9. ORA: Hallmark enrichment with MSigDB gene sets
+# 4. ORA: Hallmark enrichment with MSigDB gene sets
 #############################################
 
 # ----------------------------
@@ -367,7 +180,7 @@ geo_ora_hallmarks_all <- ora_hallmarks(regulon_df = geo_reg_df,
              mode = "all_targets")
 
 #############################################
-# 10. Combine and perform the meta‑analysis by TF and Hallmark.
+# 5. Combine and perform the meta‑analysis by TF and Hallmark.
 #############################################
 
 # ----------------------------
@@ -409,83 +222,6 @@ filt_hallm_meta_byTF <- hallm_meta_byTF %>%
 
 write_tsv(filt_hallm_meta_byTF, paste0(outputsFolder, "meta_hallm_byTF.tsv"))
 
-######################################################################################
-
-
-meta_hallm_byTF_barplot <- ggplot(filt_hallm_meta_byTF, aes(x = full_label, y = mean_enrichment, fill = meta_padj)) +
- geom_col(width = 0.7, color = "grey20") +
- coord_flip() +
- scale_fill_gradient(
-  low = "#2c7fb8", high = "#253494",
-  name = "Meta-adjusted\np-value",
-  trans = "reverse"
- ) +
- labs(
-  title = "Hallmark pathway enrichment across TMR regulons",
-  subtitle = "Pathways with meta-adjusted p-value < 0.05",
-  x = NULL,
-  y = "Average fold enrichment",
-  caption = "Data from GEO and TCGA"
- ) +
- theme_minimal(base_size = 14) +
- theme(
-  axis.text.y = element_markdown(size = 12),
-  axis.text.x = element_text(size = 12),
-  legend.position = "right",
-  panel.grid.minor = element_blank(),
-  panel.grid.major.y = element_blank(),
-  plot.title = element_text(face = "bold", size = 18),
-  plot.subtitle = element_text(size = 13, margin = margin(b = 10)),
-  plot.caption = element_text(size = 10, face = "italic")
- )
-
-# LOLLIPOP para meta hallmarks por TF
-meta_hallm_byTF_lollipop <- ggplot(
-  filt_hallm_meta_byTF,
-  aes(x = full_label, y = mean_enrichment)
-) +
-  geom_segment(aes(xend = full_label, y = 0, yend = mean_enrichment),
-               linewidth = 0.9, color = "grey60") +
-  geom_point(aes(color = meta_padj),
-             size = 3.4, stroke = 0.2) +
-  coord_flip() +
-  scale_color_gradient(
-    low = "#2c7fb8", high = "#253494",
-    name = "Meta-adjusted\np-value",
-    trans = "reverse"
-  ) +
-  labs(
-    title = "Hallmark pathway enrichment across TMR regulons",
-    subtitle = "Pathways with meta-adjusted p-value < 0.05",
-    x = NULL,
-    y = "Average fold enrichment",
-    caption = "Data from GEO and TCGA"
-  ) +
-  theme_minimal(base_size = 14) +
-  theme(
-    axis.text.y = element_markdown(size = 8),
-    axis.text.x = element_text(size = 10),
-    legend.position = "right",
-    panel.grid.minor = element_blank(),
-    panel.grid.major.y = element_blank(),
-    plot.title = element_text(face = "bold", size = 18),
-    plot.subtitle = element_text(size = 13, margin = margin(b = 10)),
-    plot.caption = element_text(size = 10, face = "italic")
-  )
-
-
-######################################################################################
-
-ggsave(paste0(plotsFolder, "meta_hallm_byTF_barplot.pdf"), plot = meta_hallm_byTF_barplot, 
-    width = 12, height = 10, units = "in", dpi = 300)
-ggsave(paste0(plotsFolder, "meta_hallm_byTF_barplot.png"), plot = meta_hallm_byTF_barplot, 
-    width = 12, height = 10, units = "in", dpi = 300)
-
-ggsave(paste0(plotsFolder, "meta_hallm_byTF_lollipop.pdf"), plot = meta_hallm_byTF_lollipop, 
-  width = 12, height = 5, dpi = 300)
-ggsave(paste0(plotsFolder, "meta_hallm_byTF_lollipop.png"), plot = meta_hallm_byTF_lollipop, 
-  width = 12, height = 5, dpi = 300)
-
 
 # ----------------------------
 ### All
@@ -525,215 +261,10 @@ filt_hallm_meta_all <- hallm_meta_all %>%
  )
 
 write_tsv(filt_hallm_meta_all, paste0(outputsFolder, "meta_hallm_all.tsv"))
-######################################################################################
 
-
-meta_hallm_all_barplot <- ggplot(filt_hallm_meta_all, aes(x = full_label, y = mean_enrichment, fill = meta_padj)) +
- geom_col(width = 0.7, color = "grey20") +
- coord_flip() +
- scale_fill_gradient(
-  low = "#2c7fb8", high = "#253494",
-  name = "Meta-adjusted\np-value",
-  trans = "reverse"
- ) +
- labs(
-  title = "Hallmark pathway enrichment across TMR regulons",
-  subtitle = "Pathways with meta-adjusted p-value < 0.05",
-  x = NULL,
-  y = "Average fold enrichment",
-  caption = "Data from GEO and TCGA"
- ) +
- theme_minimal(base_size = 14) +
- theme(
-  axis.text.y = element_markdown(size = 12),
-  axis.text.x = element_text(size = 12),
-  legend.position = "right",
-  panel.grid.minor = element_blank(),
-  panel.grid.major.y = element_blank(),
-  plot.title = element_text(face = "bold", size = 18),
-  plot.subtitle = element_text(size = 13, margin = margin(b = 10)),
-  plot.caption = element_text(size = 10, face = "italic")
- )
-
-# LOLLIPOP para meta hallmarks (ALL)
-meta_hallm_all_lollipop <- ggplot(
-  filt_hallm_meta_all,
-  aes(x = full_label, y = mean_enrichment)
-) +
-  # tallo
-  geom_segment(aes(xend = full_label, y = 0, yend = mean_enrichment),
-               linewidth = 0.9, color = "grey60") +
-  geom_point(aes(color = meta_padj),
-             size = 3.4, stroke = 0.2) +
-  coord_flip() +
-  scale_color_gradient(
-    low = "#2c7fb8", high = "#253494",
-    name = "Meta-adjusted\np-value",
-    trans = "reverse"
-  ) +
-  labs(
-    title = "Hallmark pathway enrichment across TMR regulons",
-    subtitle = "Pathways with meta-adjusted p-value < 0.05",
-    x = NULL,
-    y = "Average fold enrichment",
-    caption = "Data from GEO and TCGA"
-  ) +
-  theme_minimal(base_size = 14) +
-  theme(
-    axis.text.y = element_markdown(size = 8),
-    axis.text.x = element_text(size = 10),
-    legend.position = "right",
-    panel.grid.minor = element_blank(),
-    panel.grid.major.y = element_blank(),
-    plot.title = element_text(face = "bold", size = 18),
-    plot.subtitle = element_text(size = 13, margin = margin(b = 10)),
-    plot.caption = element_text(size = 10, face = "italic")
-  )
-
-######################################################################################
-
-ggsave(paste0(plotsFolder, "meta_hallm_all_barplot.pdf"), plot = meta_hallm_all_barplot, 
-    width = 12, height = 10, units = "in", dpi = 300)
-ggsave(paste0(plotsFolder, "meta_hallm_all_barplot.png"), plot = meta_hallm_all_barplot, 
-    width = 12, height = 10, units = "in", dpi = 300)
-
-ggsave(paste0(plotsFolder, "meta_hallm_all_lollipop.pdf"),
-       plot = meta_hallm_all_lollipop, width = 12, height = 4, units = "in", dpi = 300)
-ggsave(paste0(plotsFolder, "meta_hallm_all_lollipop.png"),
-       plot = meta_hallm_all_lollipop, width = 12, height = 4, units = "in", dpi = 300)
-
-# ----------------------------
-### heatmap plot
-# ----------------------------
-
-# — 1. Prepare data —
-tf_hallmark_long <- filt_hallm_meta_byTF %>% 
- distinct(set, label) %>% 
- mutate(present = 1) %>% 
- pivot_wider(names_from = label, values_from = present, values_fill = 0) %>% 
- pivot_longer(-set, names_to = "hallmark", values_to = "present") %>% 
- filter(present == 1)
-
-hallmark_counts <- tf_hallmark_long %>% 
- count(hallmark) %>% 
- arrange(desc(n))
-
-tf_counts <- tf_hallmark_long %>% 
- count(set) %>% 
- arrange(n)
-
-hallmark_levels <- hallmark_counts$hallmark
-tf_levels    <- tf_counts$set
-
-tf_hallmark_long <- tf_hallmark_long %>% 
- mutate(
-  hallmark = factor(hallmark, levels = hallmark_levels),
-  set    = factor(set,    levels = tf_levels)
- )
-hallmark_counts <- hallmark_counts %>% 
- mutate(hallmark = factor(hallmark, levels = hallmark_levels))
-tf_counts    <- tf_counts    %>% 
- mutate(set    = factor(set, levels = tf_levels))
-
-# — 2. Three panels —
-
-# 2a) Dot matrix (heatmap‐like)
-main_plot <- ggplot(tf_hallmark_long, aes(x = hallmark, y = set)) +
- geom_point(size = 3) +
- scale_x_discrete(expand = expansion(add = c(0.5, 0.5))) +
- scale_y_discrete(expand = expansion(add = c(0.5, 0.5))) +
- theme_minimal() +
- theme(
-  axis.title = element_blank(),
-  axis.text.x = element_text(angle = 45, hjust = 1),
-  panel.grid = element_blank()
- )
-
-# 2b) Bars above with mixed labels
-top_bar <- ggplot(hallmark_counts, aes(x = hallmark, y = n)) +
- geom_col(fill = "grey40", width = 0.4) +
- geom_text(
-  data  = subset(hallmark_counts, n >= 4),
-  aes(label = n),
-  vjust  = 2, 
-  color  = "white",
-  size  = 3
- ) +
- geom_text(
-  data  = subset(hallmark_counts, n <= 3),
-  aes(label = n),
-  vjust  = -0.3, 
-  color  = "black",
-  size  = 3
- ) +
- scale_x_discrete(limits = hallmark_levels, expand = c(0, 0)) +
- scale_y_continuous(expand = expansion(mult = c(0, 0.05))) +
- theme_minimal() +
- theme(
-  axis.title = element_blank(),
-  axis.text  = element_blank(),
-  axis.ticks = element_blank(),
-  panel.grid = element_blank()
- )
-
-# 2c) Bars on the right with conditional labels
-right_bar <- ggplot(tf_counts, aes(x = n, y = set)) +
- geom_col(fill = "grey40", width = 0.6) +
- geom_text(
-  data = filter(tf_counts, n >= 2),
-  aes(label = n),
-  hjust = 2,
-  color = "white",
-  size = 3
- ) +
- geom_text(
-  data = filter(tf_counts, n == 1),
-  aes(label = n),
-  hjust = -0.2,
-  color = "black",
-  size = 3
- ) +
- scale_x_continuous(expand = expansion(mult = c(0, 0.05))) +
- scale_y_discrete(limits = tf_levels, expand = c(0, 0)) +
- theme_minimal() +
- theme(
-  axis.title  = element_blank(),
-  axis.text  = element_blank(),
-  axis.ticks  = element_blank(),
-  panel.grid  = element_blank()
- )
-
-# 3. Assemble it
-upper <- cowplot::plot_grid(
- NULL, top_bar, NULL,
- ncol    = 3,
- rel_widths = c(0.3, 3.9, 1.15),
- align   = "h"
-)
-
-lower <- cowplot::plot_grid(
- main_plot, right_bar,
- ncol    = 2,
- rel_widths = c(4, 1),
- align   = "h"
-)
-
-co_ocurrence <- cowplot::plot_grid(
- upper, lower,
- nrow    = 2,
- rel_heights = c(0.5, 4),
- align    = "v"
-)
-
-co_ocurrence
-
-ggsave(paste0(plotsFolder,"meta_tmrs-hallamrks_co-ocurrence-plot.pdf"), plot = co_ocurrence, 
-    width = 15, height = 9, units = "in", dpi = 300)
-ggsave(paste0(plotsFolder,"meta_tmrs-hallamrks_co-ocurrence-plot.png"), plot = co_ocurrence, 
-    width = 15, height = 9, units = "in", dpi = 300)
 
 #############################################
-# 11. ORA: GO + KEGG enrichment per TF and all targets
+# 6. ORA: GO + KEGG enrichment per TF and all targets
 #############################################
 
 # ----------------------------
@@ -790,7 +321,7 @@ geo_ora_kegg_all_targets <- ora_kegg(regulon_df = geo_reg_df,
                  mode = "all_targets")
 
 #############################################
-# 12. Meta analysis ORA: GO enrichment per TF 
+# 7. Meta analysis ORA: GO enrichment per TF 
 #############################################
 
 go_meta_byTF <- full_join(
@@ -835,85 +366,9 @@ filt_go_meta_byTF <- go_meta_byTF %>%
  )
 
 write_tsv(filt_go_meta_byTF, paste0(outputsFolder, "meta_go_byTF.tsv"))
-######################################################################################
-
-
-meta_go_bar_plot_byTF <- ggplot(filt_go_meta_byTF, aes(x = full_label, y = mean_enrichment, fill = meta_padj)) +
- geom_col(width = 0.7, color = "grey20") +
- coord_flip() +
- scale_fill_gradient(
-  low = "#2c7fb8", high = "#253494",
-  name = "Meta-adjusted\np-value",
-  trans = "reverse"
- ) +
- labs(
-  title = "GO ontologies enrichment across TMR regulons",
-  subtitle = "Top pathways with meta-adjusted p-value < 0.05",
-  x = NULL,
-  y = "Average fold enrichment",
-  caption = "Data from GEO and TCGA"
- ) +
- theme_minimal(base_size = 14) +
- theme(
-  axis.text.y = element_markdown(size = 12),
-  axis.text.x = element_text(size = 12),
-  legend.position = "right",
-  panel.grid.minor = element_blank(),
-  panel.grid.major.y = element_blank(),
-  plot.title = element_text(face = "bold", size = 18),
-  plot.subtitle = element_text(size = 13, margin = margin(b = 10)),
-  plot.caption = element_text(size = 10, face = "italic")
- )
-
-# LOLLIPOP para GO enrichment across TMR regulons
-meta_go_lollipop_byTF <- ggplot(
-  filt_go_meta_byTF,
-  aes(x = full_label, y = mean_enrichment)
-) +
-  geom_segment(aes(xend = full_label, y = 0, yend = mean_enrichment),
-               linewidth = 0.9, color = "grey60") +
-  geom_point(aes(color = meta_padj),
-             size = 3.4, stroke = 0.2) +
-  coord_flip() +
-  scale_color_gradient(
-    low = "#2c7fb8", high = "#253494",
-    name = "Meta-adjusted\np-value",
-    trans = "reverse"
-  ) +
-  labs(
-    title = "GO ontologies enrichment across TMR regulons",
-    subtitle = "Top pathways with meta-adjusted p-value < 0.05",
-    x = NULL,
-    y = "Average fold enrichment",
-    caption = "Data from GEO and TCGA"
-  ) +
-  theme_minimal(base_size = 14) +
-  theme(
-    axis.text.y = element_markdown(size = 8),
-    axis.text.x = element_text(size = 10),
-    legend.position = "right",
-    panel.grid.minor = element_blank(),
-    panel.grid.major.y = element_blank(),
-    plot.title = element_text(face = "bold", size = 18),
-    plot.subtitle = element_text(size = 13, margin = margin(b = 10)),
-    plot.caption = element_text(size = 10, face = "italic")
-  )
-
-
-######################################################################################
-ggsave(paste0(plotsFolder, "meta_go_bar_plot_byTF.pdf"), plot = meta_go_bar_plot_byTF, 
-    width = 12, height = 10, units = "in", dpi = 300)
-ggsave(paste0(plotsFolder, "meta_go_bar_plot_byTF.png"), plot = meta_go_bar_plot_byTF, 
-    width = 12, height = 10, units = "in", dpi = 300)
-
-ggsave(paste0(plotsFolder, "meta_go_lollipop_byTF.pdf"),
-       plot = meta_go_lollipop_byTF, width = 12, height = 4, units = "in", dpi = 300)
-ggsave(paste0(plotsFolder, "meta_go_lollipop_byTF.png"),
-       plot = meta_go_lollipop_byTF, width = 12, height = 4, units = "in", dpi = 300)
-
 
 #############################################
-# 13. Meta analysis ORA: KEGG enrichment per TF 
+# 8. Meta analysis ORA: KEGG enrichment per TF 
 #############################################
 
 kegg_meta_byTF <- full_join(
@@ -963,81 +418,15 @@ filt_kegg_meta_byTF <- kegg_meta_byTF %>%
  )
 
 write_tsv(filt_kegg_meta_byTF, paste0(outputsFolder, "meta_kegg_byTF.tsv"))
-######################################################################################
-
-meta_kegg_bar_plot_byTF <- ggplot(filt_kegg_meta_byTF, aes(x = full_label, y = mean_enrichment, fill = meta_padj)) +
- geom_col(width = 0.7, color = "grey20") +
- coord_flip() +
- scale_fill_gradient(
-  low = "#2c7fb8", high = "#253494",
-  name = "Meta-adjusted\np-value",
-  trans = "reverse"
- ) +
- labs(
-  title = "KEGG phatways enrichment across TMR regulons",
-  subtitle = "Top pathways with meta-adjusted p-value < 0.05",
-  x = NULL,
-  y = "Average fold enrichment",
-  caption = "Data from GEO and TCGA"
- ) +
- theme_minimal(base_size = 14) +
- theme(
-  axis.text.y = element_markdown(size = 12),
-  axis.text.x = element_text(size = 12),
-  legend.position = "right",
-  panel.grid.minor = element_blank(),
-  panel.grid.major.y = element_blank(),
-  plot.title = element_text(face = "bold", size = 18),
-  plot.subtitle = element_text(size = 13, margin = margin(b = 10)),
-  plot.caption = element_text(size = 10, face = "italic")
- )
-
-meta_kegg_lollipop_byTF <- ggplot(
-  filt_kegg_meta_byTF,
-  aes(x = full_label, y = mean_enrichment)
-) +
-  geom_segment(aes(xend = full_label, y = 0, yend = mean_enrichment),
-               linewidth = 0.9, color = "grey60") +
-  geom_point(aes(color = -log10(meta_padj), size = abs(mean_nes)),
-             alpha = 0.95) +
-  coord_flip() +
-  scale_color_gradient(
-    low = "#a6bddb", high = "#045a8d",
-    name = expression(-log[10]("meta padj"))
-  ) +
-  scale_size_continuous(name = "|mean NES|") +
-  labs(
-    title = "KEGG pathways enrichment across TMR regulons",
-    subtitle = "p.adj meta < 0.05 | color = -log10(p.adj), tamaño = |NES|",
-    x = NULL,
-    y = "Average fold enrichment"
-  ) +
-  theme_minimal(base_size = 14) +
-  theme(
-    axis.text.y = element_markdown(size = 12),
-    panel.grid.major.y = element_blank()
-  )
-
-
-######################################################################################
-
-ggsave(paste0(plotsFolder, "meta_kegg_bar_plot_byTF.pdf"), plot = meta_kegg_bar_plot_byTF, 
-    width = 12, height = 10, units = "in", dpi = 300)
-ggsave(paste0(plotsFolder, "meta_kegg_bar_plot_byTF.png"), plot = meta_kegg_bar_plot_byTF, 
-    width = 12, height = 10, units = "in", dpi = 300)
-
-ggsave(paste0(plotsFolder, "meta_kegg_lollipop_byTF2.png"),
-       plot = meta_kegg_lollipop_byTF2, width = 12, height = 10, units = "in", dpi = 300)
-
 
 #############################################
-# 14. Meta analysis ORA: GEO enrichment per all targets 
+# 9. Meta analysis ORA: GEO enrichment per all targets 
 #############################################
 
 # GEO did not have enriched ontologies
 
 #############################################
-# 15. Meta analysis ORA: KEGG enrichment per all targets 
+# 10. Meta analysis ORA: KEGG enrichment per all targets 
 #############################################
 
 kegg_meta_all_targets <- full_join(
@@ -1087,74 +476,14 @@ filt_kegg_meta_all_targets <- kegg_meta_all_targets %>%
  )
 
 write_tsv(filt_kegg_meta_all_targets, paste0(outputsFolder, "meta_kegg_all.tsv"))
-######################################################################################
 
-meta_kegg_bar_plot_all_targets <- ggplot(filt_kegg_meta_all_targets, aes(x = full_label, y = mean_enrichment, fill = meta_padj)) +
- geom_col(width = 0.7, color = "grey20") +
- coord_flip() +
- scale_fill_gradient(
-  low = "#2c7fb8", high = "#253494",
-  name = "Meta-adjusted\np-value",
-  trans = "reverse"
- ) +
- labs(
-  title = "KEGG phatways enrichment across TMR regulons",
-  subtitle = "Top pathways with meta-adjusted p-value < 0.05",
-  x = NULL,
-  y = "Average fold enrichment",
-  caption = "Data from GEO and TCGA"
- ) +
- theme_minimal(base_size = 14) +
- theme(
-  axis.text.y = element_markdown(size = 12),
-  axis.text.x = element_text(size = 12),
-  legend.position = "right",
-  panel.grid.minor = element_blank(),
-  panel.grid.major.y = element_blank(),
-  plot.title = element_text(face = "bold", size = 18),
-  plot.subtitle = element_text(size = 13, margin = margin(b = 10)),
-  plot.caption = element_text(size = 10, face = "italic")
- )
+#############################################
+# 11. Meta analysis ORA visualization 
+#############################################
 
-meta_kegg_lollipop_all_targets <- ggplot(
-  filt_kegg_meta_all_targets,
-  aes(x = full_label, y = mean_enrichment)
-) +
-  geom_segment(aes(xend = full_label, y = 0, yend = mean_enrichment),
-               linewidth = 0.9, color = "grey60") +
-  geom_point(aes(color = -log10(meta_padj), size = abs(mean_nes)),
-             alpha = 0.95) +
-  coord_flip() +
-  scale_color_gradient(
-    low = "#a6bddb", high = "#045a8d",
-    name = expression(-log[10]("meta padj"))
-  ) +
-  scale_size_continuous(name = "|mean NES|") +
-  labs(
-    title = "KEGG pathways enrichment across TMR regulons",
-    subtitle = "p.adj meta < 0.05 | color = -log10(p.adj), tamaño = |NES|",
-    x = NULL,
-    y = "Average fold enrichment"
-  ) +
-  theme_minimal(base_size = 14) +
-  theme(
-    axis.text.y = element_markdown(size = 12),
-    panel.grid.major.y = element_blank()
-  )
-
-######################################################################################
-
-ggsave(paste0(plotsFolder, "meta_kegg_bar_plot_all_targets.pdf"), plot = meta_kegg_bar_plot_all_targets, 
-    width = 12, height = 10, units = "in", dpi = 300)
-ggsave(paste0(plotsFolder, "meta_kegg_bar_plot_all_targets.png"), plot = meta_kegg_bar_plot_all_targets, 
-    width = 12, height = 10, units = "in", dpi = 300)
-
-ggsave(paste0(plotsFolder, "meta_kegg_lollipop_all_targets2.png"),
-       plot = meta_kegg_lollipop_all_targets2, width = 12, height = 10, units = "in", dpi = 300)
-
-
-# ==== FIGURE 4 ====
-
+##########################################################################################
+# ==== FIGURE 3 ====
+##########################################################################################
 
 p4a_kegg_all <- ggplot(
   filt_kegg_meta_all_targets,
@@ -1216,9 +545,10 @@ ggsave(paste0(plotsFolder, "Figure4_meta_enrichment_combined_targets.pdf"),
        plot = figure4, width = 15, height = 5, units = "in", dpi = 300)
 ggsave(paste0(plotsFolder, "Figure4_meta_enrichment_combined_targets.png"),
        plot = figure4, width = 15, height = 5, units = "in", dpi = 300)
- 
-# ==== FIGURE 5 ====
 
+##########################################################################################
+# ==== FIGURE 4 ====
+##########################################################################################
 
 p5a_hallm_byTF <- ggplot(
   filt_hallm_meta_byTF,
@@ -1292,10 +622,9 @@ ggsave(paste0(plotsFolder, "Figure5_meta_enrichment_TMR_regulons.pdf"),
 ggsave(paste0(plotsFolder, "Figure5_meta_enrichment_TMR_regulons.png"),
        plot = figure5, width = 15, height = 16, units = "in", dpi = 300)
 
-# ==== FIGURA 6 (versión mejorada)  ============================================
-# ----------------------------
-### heatmap plot
-# ----------------------------
+#############################################
+# 12. Meta analysis ORA visualization: heatmap plot
+#############################################
 
 # — 1. Prepare data —
 tf_hallmark_long <- filt_hallm_meta_byTF %>% 
@@ -1326,7 +655,6 @@ hallmark_counts <- hallmark_counts %>%
 tf_counts    <- tf_counts    %>% 
  mutate(set    = factor(set, levels = tf_levels))
 
-# Consolida por (set, hallmark): color = -log10(padj) más extremo; size = promedio |NES|
 df_bubbles <- filt_hallm_meta_byTF %>%
   dplyr::transmute(
     set,
@@ -1345,15 +673,14 @@ df_bubbles <- filt_hallm_meta_byTF %>%
     set      = factor(set,      levels = tf_levels)
   )
 
-# — 2. Three panels —
-
-# 2a) Dot matrix (heatmap‐like)
+##########################################################################################
+# ==== FIGURA 5  =====
+##########################################################################################
 
 # =========================
-# 1) Panel central (burbujas)
+# 1) Central panel (buble)
 # =========================
-# df_bubbles ya debe existir y tener: set, hallmark, logp (-log10 padj), size (=|NES| promedio)
-# Asegura el mismo orden que tus barras:
+
 df_bubbles <- df_bubbles %>%
   mutate(
     hallmark = factor(hallmark, levels = hallmark_levels),
@@ -1384,8 +711,9 @@ main_plot <- ggplot(df_bubbles, aes(x = hallmark, y = set)) +
   )
 
 # =========================
-# 2) Barras superior e izquierda (tu mismo código)
+# 2) Top lefth bar
 # =========================
+
 top_bar <- ggplot(hallmark_counts, aes(x = hallmark, y = n)) +
   geom_col(fill = "grey40", width = 0.4) +
   geom_text(
@@ -1432,10 +760,9 @@ right_bar <- ggplot(tf_counts, aes(x = n, y = set)) +
   )
 
 # =========================
-# 3) Extraer leyenda y ensamblar con cowplot
+# 3) Extract legend and assemble with cowplot
 # =========================
 
-# Leyenda horizontal (colecta fill + size)
 legend_grob <- cowplot::get_legend(
   main_plot +
     theme(
@@ -1451,10 +778,10 @@ legend_grob <- cowplot::get_legend(
     )
 )
 
-# Panel central sin leyenda
+# Central panel without legend
 main_plot_noleg <- main_plot + theme(legend.position = "none")
 
-# Fila superior (barras arriba)
+# Top row (bars above)
 upper <- cowplot::plot_grid(
   NULL, top_bar, NULL,
   ncol = 3,
@@ -1462,7 +789,7 @@ upper <- cowplot::plot_grid(
   align = "h"
 )
 
-# Fila intermedia (matriz + barras derecha)
+# Middle row (matrix + right bars)
 middle <- cowplot::plot_grid(
   main_plot_noleg, right_bar,
   ncol = 2,
@@ -1470,22 +797,19 @@ middle <- cowplot::plot_grid(
   align = "h"
 )
 
-# Fila inferior (leyenda)
+# Bottom row (legend)
 bottom <- cowplot::plot_grid(
   legend_grob, ncol = 1
 )
 
-# Ensamble final: arriba / medio / leyenda
+# Final assembly: top / middle / legend
 co_ocurrence <- cowplot::plot_grid(
   upper, middle, bottom,
   ncol = 1,
-  rel_heights = c(0.5, 4, 0.45),  # ajusta la altura de la leyenda aquí
+  rel_heights = c(0.5, 4, 0.45),
   align = "v"
 )
 
-# (opcional) guardar
-# ggsave(paste0(plotsFolder, "Figure6_hallmarks_byTF_cooccurrence_with_legend_bottom.png"),
-#        co_ocurrence, width = 16, height = 9, units = "in", dpi = 300)
 
 co_ocurrence
 
@@ -1494,4 +818,4 @@ ggsave(paste0(plotsFolder,"meta_tmrs-hallamrks_co-ocurrence-plot.pdf"), plot = c
 ggsave(paste0(plotsFolder,"meta_tmrs-hallamrks_co-ocurrence-plot.png"), plot = co_ocurrence, 
     width = 15, height = 9, units = "in", dpi = 300)
 
-# save.image("meta_analysis_session.RData")
+# save.image("meta_session.RData")

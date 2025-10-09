@@ -45,7 +45,7 @@ dir.create(outputsFolder, showWarnings = FALSE, recursive = TRUE)
 dir.create(plotsFolder,   showWarnings = FALSE, recursive = TRUE)
 
 # Load helper functions
-source("scripts/helpers.R")
+source("helpers.R")
 
 # utylities
 `%||%` <- function(a, b) if (is.null(a)) b else a
@@ -170,12 +170,12 @@ cis_plus    <- vroom::vroom(paste0(cisbp_dir, "/TF_Information_all_motifs_plus.t
 cisbp_pwm_list <- purrr::map(missing_tfs, function(tf) {
   meta <- get_cisbp_motif_meta(tf, cis_primary, cis_all, cis_plus)
   if (is.null(meta) || is.null(meta$motif_id) || meta$motif_id %in% c(".", "")) {
-    warning("CIS-BP no tiene motivo (ni exacto ni fuzzy) para: ", tf)
+    warning("CIS-BP has no motifs (neither exact nor fuzzy) to: ", tf)
     return(NULL)
   }
   pfm <- read_cisbp_pfm(meta$motif_id, pwms_dir, verbose = FALSE)
   if (is.null(pfm)) {
-    warning("No pude leer PFM para ", tf, " (motif_id=", meta$motif_id, ")")
+    warning("I couldn't read PFM for ", tf, " (motif_id=", meta$motif_id, ")")
     return(NULL)
   }
   pwm <- TFBSTools::toPWM(pfm, pseudocounts = 0.2)
@@ -227,7 +227,7 @@ cisbp_pwm_list   <- imap(cisbp_pwm_list,   ~ { .x@tags$source <- "CIS-BP"; .x })
 to_pwm_if_needed <- function(x) {
   if (inherits(x, "PWMatrix")) return(x)
   if (inherits(x, "PFMatrix")) return(TFBSTools::toPWM(x, pseudocounts = 0.2))
-  stop("Objeto de motivo no reconocido: ", class(x)[1])
+  stop("Object of unrecognized motif:", class(x)[1])
 }
 pwm_jaspar_auto   <- imap(pfm_list,    ~ to_pwm_if_needed(.x))
 pwm_jaspar_manual <- imap(manual_pfms, ~ to_pwm_if_needed(.x))
@@ -700,7 +700,7 @@ full_mat[common_r, common_c] <- mat_obs[common_r, common_c]
 interaction_mat <- full_mat
 
 #############################################
-# 9) Circus plot ARACNe support
+# 9) Circus plot ARACNe support + Expresión analysis
 #############################################
 
 base_pal <- colorRampPalette(brewer.pal(11, "Spectral"))(length(tf_order))
@@ -715,105 +715,9 @@ color_mat[interaction_mat == 0] <- "transparent"
 
 grid_cols <- tf_colors
 
-circos.clear()
-circos.par(start.degree = 90, gap.degree = 1, track.margin = c(0.02, 0.02))
-
-chordDiagram(
-  x               = interaction_mat,
-  order           = tf_order,
-  grid.col        = tf_colors,
-  col             = color_mat,
-  link.arr.col    = color_mat,
-  link.border     = NA,
-  directional     = TRUE,
-  direction.type  = "arrows",
-  link.arr.length = 0.05,
-  link.arr.width  = 0.05,
-  transparency    = 0.25,
-  annotationTrack = "grid",
-  preAllocateTracks = list(
-    list(track.height = uh(4, "mm")),
-    list(track.height = uh(3, "mm"))
-  )
-)
-
-# ========= 6) Outer ring: meta-direction (up/down) =========
-
-dir_cols <- c(up = "#ca0020", down = "#0571b0")  # red=up, blue=down
-names(dir_cols) <- names(dir_cols)
-
-old_pad <- circos.par("cell.padding")
-circos.par(cell.padding = c(0, 0, 0, 0)) 
-
-circos.trackPlotRegion(
-  track.index = 2,
-  bg.border   = NA,
-  panel.fun   = function(x, y) {
-    sec  <- get.cell.meta.data("sector.index")
-    dir  <- meta_dir$dir[match(sec, meta_dir$tf)]
-    col  <- ifelse(is.na(dir), "grey85", dir_cols[dir])
-    xl   <- get.cell.meta.data("xlim")
-    circos.rect(xl[1], 0, xl[2], 1, col = col, border = NA)
-  }
-)
-
-# restores padding for the rest
-circos.par(cell.padding = old_pad)
-
-# ========= 7) Labels outside the circle with (n_targets/n_beaters) =========
-label_df <- tibble::tibble(tf = tf_order) %>%
-  mutate(
-    n_targets_mi  = purrr::map_int(tf, ~ sum(interaction_mat[.x, ] > 0, na.rm = TRUE)),
-    n_beaters_mi  = purrr::map_int(tf, ~ sum(interaction_mat[, .x] > 0, na.rm = TRUE)),
-    label         = paste0(tf, " (", n_targets_mi, "/", n_beaters_mi, ")")
-  )
-sector_labels <- setNames(label_df$label, label_df$tf)
-
-circos.trackPlotRegion(
-  track.index = 1,
-  bg.border   = NA,
-  panel.fun   = function(x, y) {
-    sec  <- get.cell.meta.data("sector.index")
-    xl   <- get.cell.meta.data("xlim")
-    circos.text(
-      x       = mean(xl),
-      y       = 0.5, 
-      labels  = sector_labels[sec],
-      facing  = "clockwise",
-      niceFacing = FALSE,
-      adj     = c(0, 0.5),
-      cex     = 0.75
-    )
-  }
-)
-
-
-# Legends
-lg_dir <- Legend(
-  labels = c("Up-regulated", "Down-regulated"),
-  legend_gp = gpar(fill = c("#D62728", "#1F77B4")),
-  title = "Expression direction",
-  grid_width = unit(3, "mm"),
-  grid_height = unit(3, "mm")
-)
-
-lg_aracne <- Legend(
-  labels = c("High support", "Low support"),
-  legend_gp = gpar(lwd = c(2, 0.5), col = "grey20"),
-  title = "ARACNe support",
-  type = "lines"
-)
-
-lg_pack <- packLegend(lg_dir, lg_aracne, direction = "horizontal")
-
-draw(
-  lg_pack,
-  x    = unit(0.08, "npc"), 
-  y    = unit(0.08, "npc"), 
-  just = c("left", "bottom")
-)
 
 ################################################################################
+# ==== FIGURE 2 ====
 ################################################################################
 
 # Save to PDF and PNG
@@ -826,8 +730,6 @@ png_wh  <- 12400
 png_res    <- 600 
 dir_cols <- c(up = "#E41A1C", down = "#377EB8")  # rojo=up, azul=down
 names(dir_cols) <- names(dir_cols)
-
-
 
 # 1) PDF save
 pdf(pdf_file, width = pdf_wh+0.5, height = pdf_wh)

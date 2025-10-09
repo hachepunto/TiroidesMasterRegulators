@@ -1,7 +1,10 @@
 
 # tcga_analysis.R
-# Transcriptomic analysis of TCGA-THCA for the subtype "Papillary adenocarcinoma, NOS"
-# Hugo Tovar, National Inmstitute of Genomic Medicine, Mexico hatovar@inmegen.gob.mx
+# Transcriptomic analysis of TCGA-THCA for paper:
+# "Two Cohorts, One Network: Consensus Master Regulators 
+# Orchestrating Papillary Thyroid Carcinoma"
+# Hugo Tovar, National Inmstitute of Genomic Medicine, Mexico 
+# hatovar@inmegen.gob.mx
 
 #############################################
 # 1. Load required libraries
@@ -20,13 +23,12 @@ suppressPackageStartupMessages({
   library(readr)
   library(limma)
   library(edgeR)
-  library(EnhancedVolcano)
   library(pheatmap)
   library(RColorBrewer)
   library(gplots)
 })
 # Load helper functions
-source("scripts/helpers.R")
+source("helpers.R")
 
 # Create output directories
 outputsFolder <- paste0(getwd(), "/results/")
@@ -97,7 +99,7 @@ exp_matrix <- exp_matrix[, -1]
 
 sample_ids <- colnames(exp_matrix)
 tumors <- sample_ids[grepl("-01A", sample_ids)]
-healty <- sample_ids[grepl("-11A", sample_ids)]
+healthy <- sample_ids[grepl("-11A", sample_ids)]
 
 dge <- DGEList(counts = exp_matrix)
 dge <- calcNormFactors(dge, method = "TMM")
@@ -124,168 +126,24 @@ deg_results <- topTable(fit, coef = "grouptumor", number = Inf, sort.by = "P")
 deg_results <- rownames_to_column(deg_results, var = "gene_name")
 write_tsv(deg_results, paste0(outputsFolder, "DEGs_limma_TCGA.tsv"))
 
-# ----------------------------
-# Volcano plot
-# ----------------------------
-pdf(paste0(plotsFolder, "volcano_TCGA.pdf"), width = 8, height = 8)
-EnhancedVolcano(deg_results,
-                lab = deg_results$gene_name,
-                x = 'logFC',
-                y = 'adj.P.Val',
-                title = 'TCGA Papillary NOS',
-                pCutoff = 0.05,
-                FCcutoff = 1,
-                pointSize = 2.5,
-                labSize = 3)
-dev.off()
-
-# ----------------------------
-# Heatmap of top 100 DEGs
-# ----------------------------
-
-# Extract top 100 DEGs by adjusted p-value
-top_degs <- deg_results %>%
-  arrange(adj.P.Val) %>%
-  slice(1:100) %>%
-  pull(gene_name)
-
-# Extract raw matrix and compute log2(CPM + 1)
-log_cpm <- log2(cpm_matrix[top_degs, ] + 1)
-
-# Generate color vector by condition
-group_colors <- ifelse(colnames(log_cpm) %in% tumors, "#F8766D", "#00BFC4")
-
-# Add color bar above heatmap
-col_side_colors <- matrix(group_colors, nrow = 1)
-
-# Generate heatmap with Z-score per gene
-pdf(paste0(plotsFolder, "heatmap_TCGA.pdf"), width = 8, height = 8)
-heatmap.2(
-  as.matrix(log_cpm),
-  scale = "row",                  # z-transformation per row
-  trace = "none",
-  col = colorRampPalette(rev(brewer.pal(11, "RdYlBu")))(100),
-  ColSideColors = group_colors,
-  dendrogram = "both",
-  key = TRUE,
-  key.title = "Z-score",
-  key.xlab = "Expression",
-  cexRow = 0.6,
-  cexCol = 0.5,
-  margins = c(5, 9),
-  main = "Top 100 DEGs TCGA Papillary NOS"
-)
-legend("topright", legend = c("Tumor", "Normal"),
-       fill = c("#F8766D", "#00BFC4"), cex = 0.8, border = NA, bty = "n")
-dev.off()
-
-#############################################
-# 7. GSEA: GO (BP and MF) and KEGG using clusterProfiler
-#############################################
-
-# Run GSEA for GO
-gsea_go_out <- run_gsea_go(df = deg_results)
-
-# Save GO results
-write_tsv(gsea_go_out$gsea_result@result,
-          paste0(outputsFolder, "tcga_gsea_go_bp_mf.tsv"))
-
-# Ridgeplot for GO
-pdf(paste0(plotsFolder, "tcga_gsea_go.pdf"), width = 12, height = 15)
-plot_ridge_panels(gsea_go_out$gsea_result, 20, title = "TCGA GSEA GO Ridgeplot")
-dev.off()
-
-# Save GO RDS
-saveRDS(gsea_go_out, paste0(rdsFolder, "tcga_gsea_go.rds"))
-
-# GSEA for KEGG
-kegg_gsea <- gseKEGG(geneList = gsea_go_out$gene_list,
-                     organism = "hsa",
-                     pvalueCutoff = 0.05,
-                     verbose = FALSE)
-
-# Save KEGG results
-write_tsv(kegg_gsea@result, paste0(outputsFolder, "tcga_gsea_kegg.tsv"))
-
-# Ridgeplot for KEGG
-pdf(paste0(plotsFolder, "tcga_gsea_kegg.pdf"), width = 12, height = 15)
-ridgeplot(kegg_gsea, showCategory = 20, fill = "p.adjust") +
-  ggplot2::ggtitle("TCGA GSEA KEGG Ridgeplot")
-dev.off()
-
-# Save KEGG RDS
-saveRDS(kegg_gsea, paste0(rdsFolder, "tcga_gsea_kegg.rds"))
-
-
-# Run GSEA: Hallmarks (MSigDB) using clusterProfiler
-# Load Hallmark data (GSEA Broad GMT)
-hallmark_gmt <- read.gmt("extra_data/h.all.v2025.1.Hs.symbols.gmt")
-hallmark_names <- read_tsv("extra_data/hallmarks_names.txt")
-
-
-# Para TCGA, parte de tcga_gsea_go$gene_mapping
-rank_sym_tcga <- gsea_go_out$gene_mapping %>%
-  inner_join(
-    AnnotationDbi::select(org.Hs.eg.db,
-                          keys   = unique(.$ENTREZID),
-                          keytype= "ENTREZID",
-                          columns= "SYMBOL") %>% as_tibble(),
-    by = "ENTREZID"
-  ) %>%
-  filter(!is.na(SYMBOL)) %>%
-  mutate(SYMBOL = toupper(SYMBOL)) %>%
-  group_by(SYMBOL) %>% summarize(logFC = mean(logFC), .groups = "drop") %>%
-  arrange(desc(logFC))
-
-gene_list_sym_tcga <- rank_sym_tcga$logFC
-names(gene_list_sym_tcga) <- rank_sym_tcga$SYMBOL
-gene_list_sym_tcga <- sort(gene_list_sym_tcga, decreasing = TRUE)
-
-# 2) Asegurar TERM2GENE/TERM2NAME en formato limpio
-hallmark_t2g <- hallmark_gmt %>%
-  as_tibble() %>%
-  transmute(term = as.character(term), gene = toupper(gene)) %>%
-  distinct(term, gene)
-
-hallmark_t2n <- hallmark_names %>%
-  transmute(term = ID, name = label_ready)
-
-gsea_hallmark_tcga <- clusterProfiler::GSEA(
-  geneList     = gene_list_sym_tcga,
-  TERM2GENE    = hallmark_t2g,
-  TERM2NAME    = hallmark_t2n,
-  pvalueCutoff = 1,
-  verbose      = FALSE
-)
-
-readr::write_tsv(as.data.frame(gsea_hallmark_tcga@result),
-                   file = paste0(outputsFolder, "tcga_gsea_hallmarks.tsv"))
-
-pdf(paste0(plotsFolder, "tcga_gsea_hallmarks.pdf"), width = 10, height = 8)
-print(enrichplot::ridgeplot(gsea_hallmark_tcga, showCategory = 20, fill = "p.adjust") +
-ggplot2::ggtitle("TCGA GSEA Hallmarks (Top 20)"))
-dev.off()
-
-ggsave(filename = paste0(plotsFolder, "tcga_gsea_hallmarks.png"),
-         plot     = enrichplot::ridgeplot(gsea_hallmark_tcga, showCategory = 20, fill = "p.adjust") +
-                    ggplot2::ggtitle("TCGA GSEA Hallmarks (Top 20)"),
-         width = 10, height = 8, dpi = 300)
-
-saveRDS(gsea_hallmark_tcga, paste0(rdsFolder, "tcga_gsea_hallmarks.rds"))
 
 
 #############################################
-# 8. Master Regulator Analysis (VIPER)
+# 7. Master Regulator Analysis (VIPER)
 #############################################
+
+# "tcga_tumor_network.txt" is the result file of the network generated 
+# with ARACNe-AP using the script "aracne-ap.sh"
+stopifnot(file.exists("tcga_tumor_network.txt"))
 
 regulon <- aracne2regulon("tcga_tumor_network.txt", cpm_matrix[, tumors])
 
-signature <- rowTtest(cpm_matrix[, tumors], cpm_matrix[, healty])
+signature <- rowTtest(cpm_matrix[, tumors], cpm_matrix[, healthy])
 signature <- (qnorm(signature$p.value / 2, lower.tail = FALSE) *
               sign(signature$statistic))[, 1]
 
 nullmodel <- ttestNull(cpm_matrix[, tumors], 
-                       cpm_matrix[, healty], 
+                       cpm_matrix[, healthy], 
                        per = 1000, repos = TRUE)
 
 mrs <- msviper(signature, regulon, nullmodel)
@@ -295,17 +153,5 @@ mrs_all <- viper_mrsTopTable(mrs, p_threshold = 1)
 saveRDS(mrs, paste0(rdsFolder, "tcga_mrs.rds"))
 write_tsv(as_tibble(mrs_all), paste0(outputsFolder, "all_mrs_table_TCGA.tsv"))
 saveRDS(mrs_all, paste0(rdsFolder, "tcga_mrs_table.rds"))
-
-# Plots
-pdf(paste0(plotsFolder, "mrs_plot_TCGA.pdf"), width = 7, height = 8)
-plot(mrs, density = 100, color = c("#0571b0", "#ca0020"),
-     smooth = 0, cex = 0, bins = 800, sep = 1, hybrid = TRUE, gama = 3)
-dev.off()
-
-png(paste0(plotsFolder, "mrs_plot_TCGA.png"), width = 960, height = 1200, res = 150)
-plot(mrs, density = 100, color = c("#0571b0", "#ca0020"),
-     smooth = 0, cex = 0, bins = 800, sep = 1, hybrid = TRUE, gama = 3)
-dev.off()
-
 
 # save.image("tcga_session.RData")
