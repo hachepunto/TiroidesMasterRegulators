@@ -15,7 +15,6 @@ suppressPackageStartupMessages({
   library(dplyr)
   library(org.Hs.eg.db)
   library(tibble)
-  library(corto)
   library(viper)
   library(clusterProfiler)
   library(forcats)
@@ -23,9 +22,6 @@ suppressPackageStartupMessages({
   library(readr)
   library(limma)
   library(edgeR)
-  library(pheatmap)
-  library(RColorBrewer)
-  library(gplots)
 })
 # Load helper functions
 source("helpers.R")

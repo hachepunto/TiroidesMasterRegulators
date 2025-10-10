@@ -16,17 +16,14 @@ suppressPackageStartupMessages({
   library(affy)
   library(org.Hs.eg.db)
   library(tibble)
-  library(corto)
   library(viper)
   library(clusterProfiler)
   library(forcats)
-  library(ggplot2)
   library(readr)
   library(limma)
   library(edgeR)
-  library(RColorBrewer)
-  library(gplots)
   library(GEOquery)
+  library(gprofiler2)
 })
 
 # Load helper functions
