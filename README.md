@@ -22,6 +22,7 @@ How to clone this repository:
 git clone hachepunto/TiroidesMasterRegulators.git
 cd TiroidesMasterRegulators
 git submodule update --init --recursive
+RScript install_packages.R # optional
 ```
 
 
