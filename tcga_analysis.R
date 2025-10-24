@@ -100,11 +100,13 @@ healthy <- sample_ids[grepl("-11A", sample_ids)]
 dge <- DGEList(counts = exp_matrix)
 dge <- calcNormFactors(dge, method = "TMM")
 cpm_matrix <- cpm(dge, normalized.lib.sizes = TRUE)
+saveRDS(cpm_matrix[, tumors], paste0(rdsFolder, "inmat_TCGA.rds"))
 
 # Save CPM matrix (tumor samples only) for ARACNe-AP
 inmat_NOS <- as.data.frame(cpm_matrix[, tumors]) %>%
   rownames_to_column(var = "gene_name")
 write_tsv(inmat_NOS, "inmat_TCGA.txt")
+
 
 #############################################
 # 6. Differential Expression Analysis (limma + voom)

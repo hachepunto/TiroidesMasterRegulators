@@ -236,7 +236,7 @@ write.table(ptc_df,
             sep = "\t",
             quote = FALSE,
             row.names = FALSE)
-
+saveRDS(ptc_matrix, paste0(rdsFolder, "inmat_GEO.rds"))
 
 #############################################
 # 6. Master Regulator Analysis (implemented in VIPER)
