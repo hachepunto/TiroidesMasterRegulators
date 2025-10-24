@@ -225,6 +225,9 @@ healty <- which(metadata$Group == "Normal")
 # Extract only PTC samples
 ptc_matrix <- collapsed[, tumors]
 
+save(tumors, healty, ptc_matrix, file = "geo_sample_groups_n_matrix.RData")
+
+
 # Convert to data.frame with gene names as a proper column
 ptc_df <- ptc_matrix %>%
   as.data.frame() %>%

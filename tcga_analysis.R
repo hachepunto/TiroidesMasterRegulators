@@ -100,6 +100,7 @@ healthy <- sample_ids[grepl("-11A", sample_ids)]
 dge <- DGEList(counts = exp_matrix)
 dge <- calcNormFactors(dge, method = "TMM")
 cpm_matrix <- cpm(dge, normalized.lib.sizes = TRUE)
+save(tumors, healty, cpm_matrix, file = "tcga_sample_groups_n_matrix.RData")
 saveRDS(cpm_matrix[, tumors], paste0(rdsFolder, "inmat_TCGA.rds"))
 
 # Save CPM matrix (tumor samples only) for ARACNe-AP
