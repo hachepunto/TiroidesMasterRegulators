@@ -39,7 +39,7 @@ dir.create(plotsFolder, showWarnings = FALSE)
 
 # Download GSE33630 manually if not already present ~850 MB
 geodataFolder <- paste0(getwd(), "/GEOdata/GSE33630/")
-dir.create(geodataFolder, showWarnings = FALSE)
+dir.create(geodataFolder, recursive = TRUE, showWarnings = FALSE)
 tar_file <- paste0(geodataFolder, "GSE33630_RAW.tar")
 if (!file.exists("GEOdata/GSE33630/GSE33630_RAW.tar")) {
   download.file(
@@ -225,7 +225,7 @@ healty <- which(metadata$Group == "Normal")
 # Extract only PTC samples
 ptc_matrix <- collapsed[, tumors]
 
-save(tumors, healty, ptc_matrix, file = "geo_sample_groups_n_matrix.RData")
+save(tumors, healty, collapsed, file = "geo_sample_groups_n_matrix.RData")
 
 
 # Convert to data.frame with gene names as a proper column
@@ -245,11 +245,8 @@ saveRDS(ptc_matrix, paste0(rdsFolder, "inmat_GEO.rds"))
 # 6. Master Regulator Analysis (implemented in VIPER)
 #############################################
 
-stopifnot(file.exists("geo_tumor_network.txt"))
-# "geo_tumor_network.txt" is the result file of the network generated 
-# with ARACNe-AP using the script "aracne-ap.sh"
-
-regulon <- aracne2regulon("geo_tumor_network.txt", collapsed[, tumors]) 
+set.seed(123)
+regulon <- aracne2regulon("../tiroides_networks/geo_tumor_network_p1E-8.txt", collapsed[, tumors]) 
 
 signature <- rowTtest(collapsed[, tumors], collapsed[, healty])
 signature <- (qnorm(signature$p.value / 2, lower.tail = FALSE) *
@@ -258,9 +255,9 @@ signature <- (qnorm(signature$p.value / 2, lower.tail = FALSE) *
 nullmodel <- ttestNull(collapsed[, tumors], 
                        collapsed[, healty], 
                        per = 1000, 
-                       repos = TRUE)
+                       repos = TRUE, cores = 30)
 
-mrs <- msviper(signature, regulon, nullmodel)
+mrs <- msviper(signature, regulon, nullmodel, cores = 30)
 mrs_all <- viper_mrsTopTable(mrs, p_threshold = 1)
 
 # Save top results

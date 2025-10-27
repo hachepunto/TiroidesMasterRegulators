@@ -100,7 +100,7 @@ healthy <- sample_ids[grepl("-11A", sample_ids)]
 dge <- DGEList(counts = exp_matrix)
 dge <- calcNormFactors(dge, method = "TMM")
 cpm_matrix <- cpm(dge, normalized.lib.sizes = TRUE)
-save(tumors, healty, cpm_matrix, file = "tcga_sample_groups_n_matrix.RData")
+save(tumors, healthy, cpm_matrix, file = "tcga_sample_groups_n_matrix.RData")
 saveRDS(cpm_matrix[, tumors], paste0(rdsFolder, "inmat_TCGA.rds"))
 
 # Save CPM matrix (tumor samples only) for ARACNe-AP
@@ -131,10 +131,9 @@ write_tsv(deg_results, paste0(outputsFolder, "DEGs_limma_TCGA.tsv"))
 # 7. Master Regulator Analysis (implemented in VIPER)
 #############################################
 
-# "tcga_tumor_network.txt" is the result file of the network generated 
-# with ARACNe-AP using the script "aracne-ap.sh"
 
-regulon <- aracne2regulon("tcga_tumor_network.txt", cpm_matrix[, tumors])
+set.seed(123)
+regulon <- aracne2regulon("../tiroides_networks/tcga_tumor_network_p1E-8.txt", cpm_matrix[, tumors])
 
 signature <- rowTtest(cpm_matrix[, tumors], cpm_matrix[, healthy])
 signature <- (qnorm(signature$p.value / 2, lower.tail = FALSE) *
@@ -142,9 +141,9 @@ signature <- (qnorm(signature$p.value / 2, lower.tail = FALSE) *
 
 nullmodel <- ttestNull(cpm_matrix[, tumors], 
                        cpm_matrix[, healthy], 
-                       per = 1000, repos = TRUE)
+                       per = 1000, repos = TRUE, cores = 30)
 
-mrs <- msviper(signature, regulon, nullmodel)
+mrs <- msviper(signature, regulon, nullmodel, cores = 30)
 mrs_all <- viper_mrsTopTable(mrs, p_threshold = 1)
 
 # Save results
