@@ -35,8 +35,7 @@ source("helpers.R")
 # Create output directories
 outputsFolder <- paste0(getwd(), "/meta_results/")
 plotsFolder <- paste0(getwd(), "/meta_results/plots/")
-dir.create(outputsFolder, showWarnings = FALSE)
-dir.create(plotsFolder, showWarnings = FALSE)
+dir.create(plotsFolder, recursive = TRUE, showWarnings = FALSE)
 
 
 #############################################
@@ -137,6 +136,11 @@ write_tsv(meta_reg_stats, paste0(outputsFolder, "shared_tarjets_by_tmr.tsv"))
 # 4. ORA: Hallmark enrichment with MSigDB gene sets
 #############################################
 
+# ------------ HALLMARKS ------------
+# Load Hallmark data (GSEA Broad GMT)
+hallmark_gmt <- read.gmt("extra_data/h.all.v2025.1.Hs.symbols.gmt")
+hallmark_names <- read_tsv("extra_data/hallmarks_names.txt")
+
 # ----------------------------
 # TCGA data
 # ----------------------------
@@ -204,8 +208,8 @@ hallm_meta_byTF <- full_join(geo_ora_hallmarks_byTF, tcga_ora_hallmarks_byTF,
   log10_meta_pval = -log10(meta_pval)
  ) %>%
  left_join(hallmark_names, by = "ID") %>%
- rename(label = label_ready) %>%
- left_join(sig_tmrs %>% select(tf, mean_nes), by = c("set" = "tf")) %>%
+ dplyr::rename(label = label_ready) %>%
+ left_join(sig_tmrs %>% dplyr::select(tf, mean_nes), by = c("set" = "tf")) %>%
  arrange(desc(abs(mean_nes)))
 
 
@@ -244,8 +248,8 @@ hallm_meta_all <- full_join(geo_ora_hallmarks_all, tcga_ora_hallmarks_all,
   log10_meta_pval = -log10(meta_pval)
  ) %>%
  left_join(hallmark_names, by = "ID") %>%
- rename(label = label_ready) %>%
- left_join(sig_tmrs %>% select(tf, mean_nes), by = c("set" = "tf")) %>%
+ dplyr::rename(label = label_ready) %>%
+ left_join(sig_tmrs %>% dplyr::select(tf, mean_nes), by = c("set" = "tf")) %>%
  arrange(desc(abs(mean_nes)))
 
 
@@ -485,7 +489,7 @@ write_tsv(filt_kegg_meta_all_targets, paste0(outputsFolder, "meta_kegg_all.tsv")
 # ==== FIGURE 3 ====
 ##########################################################################################
 
-p4a_kegg_all <- ggplot(
+p3a_kegg_all <- ggplot(
   filt_kegg_meta_all_targets,
   aes(x = full_label, y = mean_enrichment)
 ) +
@@ -510,7 +514,7 @@ p4a_kegg_all <- ggplot(
     panel.grid.major.y = element_blank()
   )
 
-p4b_hallm_all <- ggplot(
+p3b_hallm_all <- ggplot(
   filt_hallm_meta_all,
   aes(x = full_label, y = mean_enrichment)
 ) +
@@ -535,22 +539,22 @@ p4b_hallm_all <- ggplot(
     panel.grid.major.y = element_blank()
   )
 
-figure4 <- (p4a_kegg_all / p4b_hallm_all) +
+figure3 <- (p3a_kegg_all / p3b_hallm_all) +
   plot_annotation(theme = theme(
       plot.title = element_text(face = "bold", size = 18, margin = margin(b = 8))
     )
   )
 
-ggsave(paste0(plotsFolder, "Figure4_meta_enrichment_combined_targets.pdf"),
-       plot = figure4, width = 15, height = 5, units = "in", dpi = 300)
-ggsave(paste0(plotsFolder, "Figure4_meta_enrichment_combined_targets.png"),
-       plot = figure4, width = 15, height = 5, units = "in", dpi = 300)
+ggsave(paste0(plotsFolder, "Figure3_meta_enrichment_combined_targets.pdf"),
+       plot = figure3, width = 15, height = 5, units = "in", dpi = 300)
+ggsave(paste0(plotsFolder, "Figure3_meta_enrichment_combined_targets.png"),
+       plot = figure3, width = 15, height = 5, units = "in", dpi = 300)
 
 ##########################################################################################
 # ==== FIGURE 4 ====
 ##########################################################################################
 
-p5a_hallm_byTF <- ggplot(
+p4a_hallm_byTF <- ggplot(
   filt_hallm_meta_byTF,
   aes(x = full_label, y = mean_enrichment)
 ) +
@@ -571,7 +575,7 @@ p5a_hallm_byTF <- ggplot(
     panel.grid.major.y = element_blank()
   )
 
-p5b_kegg_byTF <- ggplot(
+p4b_kegg_byTF <- ggplot(
   filt_kegg_meta_byTF,
   aes(x = full_label, y = mean_enrichment)
 ) +
@@ -592,7 +596,7 @@ p5b_kegg_byTF <- ggplot(
     panel.grid.major.y = element_blank()
   )
 
-p5c_go_byTF <- ggplot(
+p4c_go_byTF <- ggplot(
   filt_go_meta_byTF,
   aes(x = full_label, y = mean_enrichment)
 ) +
@@ -613,14 +617,14 @@ p5c_go_byTF <- ggplot(
     panel.grid.major.y = element_blank()
   )
 
-figure5 <- (p5a_hallm_byTF / p5b_kegg_byTF / p5c_go_byTF) +
-  plot_layout(heights = c(3, 2, 0.6)) +  # A > B > C
+figure4 <- (p4a_hallm_byTF / p4b_kegg_byTF / p4c_go_byTF) +
+  plot_layout(heights = c(4, 4, 2)) +
   plot_annotation(theme = theme())
 
 ggsave(paste0(plotsFolder, "Figure5_meta_enrichment_TMR_regulons.pdf"),
-       plot = figure5, width = 15, height = 16, units = "in", dpi = 300)
+       plot = figure4, width = 15, height = 16, units = "in", dpi = 300)
 ggsave(paste0(plotsFolder, "Figure5_meta_enrichment_TMR_regulons.png"),
-       plot = figure5, width = 15, height = 16, units = "in", dpi = 300)
+       plot = figure4, width = 15, height = 16, units = "in", dpi = 300)
 
 #############################################
 # 12. Meta-analysis ORA visualization: heatmap plot
@@ -777,6 +781,25 @@ legend_grob <- cowplot::get_legend(
       size = guide_legend(order = 2, override.aes = list(alpha = 1), direction = "horizontal")
     )
 )
+
+# Construye un ggplot CON leyenda (abajo) y guías horizontales
+p_with_legend <- main_plot +
+  theme(
+    legend.position  = "bottom",
+    legend.box       = "horizontal",
+    legend.title     = element_text(size = 10),
+    legend.text      = element_text(size = 9)
+  ) +
+  guides(
+    fill = guide_colorbar(order = 1, barwidth = unit(120, "pt"), barheight = unit(6, "pt")),
+    size = guide_legend(order = 2, override.aes = list(alpha = 1), direction = "horizontal")
+  )
+
+# Convierte a gtable y toma el ÚLTIMO guide-box (el “bueno”)
+gt <- ggplotGrob(p_with_legend)
+ibox <- which(sapply(gt$grobs, function(x) x$name) == "guide-box")
+legend_grob <- gt$grobs[[ibox[length(ibox)]]]
+
 
 # Central panel without legend
 main_plot_noleg <- main_plot + theme(legend.position = "none")
